@@ -53,8 +53,17 @@ AC coverage:
 
 ### Phase 3: Codex hook auto-registration
 
-- **Status:** `[~]`
+- **Status:** `[!]`
 - **Goal:** When Codex's SessionStart hook regression is resolved upstream, `codexian spec init` auto-registers the session-start.mjs hook in `.codex/hooks.json` and AGENTS.md fallback becomes redundant.
 - **Acceptance:** hook entry written, hook fires in fresh Codex session, smoke test confirms behavior; AGENTS.md mandatory directive remains as graceful fallback.
+- **Blocker:** waiting on upstream openai/codex SessionStart hook regression fix. Re-open when upstream signals.
 - **Dependencies:** Phase 2; upstream openai/codex hook fix
 - **Context doc:** `CONTEXT.phase-3.md`
+
+### Phase 4: Validation depth and scope sealing
+
+- **Status:** `[~]`
+- **Goal:** Tighten the verify/plan/scope side of the contract while phase 3 is upstream-blocked. Add a verify-failure recording surface that auto-appends fix tasks to STATE.md Active work (mirrors GSD `/gsd-verify-work` fix-plan append). Then split PLAN out of ROADMAP into per-phase plan files. Finally add a plan-checker blocking gate on top of the existing Decision-ID coverage gate so plans are not just D-NN complete but goal-aligned.
+- **Acceptance:** `codexian spec record-verify-failure` CLI exists and is wired into `$spec-verify` skill for fail/partial verdicts; STATE.md Active work receives a structured fix-task bullet with root cause + evidence; per-phase plan body lives in `.codexian/spec/plans/phase-N.PLAN.md` (or equivalent), with ROADMAP retaining only a reference; coverage gate continues to fire against the new location; plan-checker blocking gate refuses to mark a phase planned when an architect-tier reviewer disagrees with the plan; unit tests cover the new modules with positive + negative cases.
+- **Dependencies:** Phase 2
+- **Context doc:** `CONTEXT.phase-4.md`

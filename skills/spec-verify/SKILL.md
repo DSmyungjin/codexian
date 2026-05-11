@@ -25,10 +25,38 @@ for that artifact when (and if) the user wants stronger evidence.
    - Capture the evidence link (command output, screenshot path,
      test name, etc.) into `VERIFY.phase-N.md`.
 3. Produce a verdict: `pass` / `fail` / `partial`.
-4. If `fail` or `partial`, append a fix-plan section that
-   `$ralph` or `$team` can pick up as a follow-up task.
+4. If `fail` or `partial`, diagnose root cause and queue a fix task
+   into `STATE.md` `## Active work` so `$ralph` / `$team` can pick
+   it up in the next session. Use the CLI primitive (see below) —
+   do not edit STATE.md by hand from this skill.
 5. Freeze the file. The seal step references this report; later
    sessions can audit phase verification without re-deriving it.
+
+### Fix-task append (phase 4 surface)
+
+When the verdict is `fail` or `partial`, shell out to the recorder
+primitive instead of editing STATE.md inline:
+
+```bash
+codexian spec record-verify-failure <slug> \
+  --fix-task "<actionable task title>" \
+  --root-cause "<one-line diagnosis>" \
+  --phase <N> \
+  --evidence "<path/to/VERIFY.phase-N.md or transcript>"
+```
+
+Behavior contract (mirrors GSD `/gsd-verify-work` fix-plan append):
+
+- Appends `- [fix] <fix-task> — root cause: ... Evidence: ... <!-- fix-slug: <slug> -->`
+  under `## Active work`. Idempotent by slug — re-running the same
+  slug does not duplicate the bullet.
+- Always appends a fresh dated line under `## Recent decisions` so
+  the failure history is chronological even when the slug re-fires.
+- Creates the `## Active work` section if missing (defensive).
+
+Pick a stable, hyphenated slug derived from the failing acceptance
+criterion (e.g. `ac-6-coverage-regression`). The slug is the only
+identifier the recorder uses for dedup, so make it specific.
 
 ## Strict rules (now and after implementation)
 

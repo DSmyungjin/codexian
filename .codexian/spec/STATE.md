@@ -25,7 +25,7 @@
 
 ## Current phase
 
-current_phase: 3
+current_phase: 4
 
 ## Last seal
 
@@ -36,9 +36,11 @@ last_sealed_at: 2026-05-11T08:22:18.923Z
 
 <!-- What is being worked on right now. Updated by executors. -->
 
-- Implementing Decision ID + plan coverage gate in src/spec/decisions.ts and src/spec/validate.ts (AC-6/AC-7)
+- Implementing verify-failure auto-append surface (phase 4): `codexian spec record-verify-failure` CLI + `$spec-verify` skill wiring
 
 ## Recent decisions
+
+- 2026-05-11T10:31:16Z — Opened phase 4 (Validation depth and scope sealing) and flipped phase 3 to `[!]` blocked pending upstream Codex hook fix. Phase 3 verify evidence (Ralph runs on Codex 0.128 / 0.130 / 0.131-alpha) is sufficient to know the upstream regression is real; we wait rather than implement against a broken target.
 
 - 2026-05-11T10:27:52.865Z — Ralph completed: verify-codex-hook-regression (phase 3) — 0.128 PASS, 0.130 + 0.131-alpha.4 NO_NOT_PRESENT. Doctor surfaces; AGENTS.md is primary load channel. Evidence: docs/codex-hook-regression.md, src/spec/doctor.ts, openai/codex#21639.
 
