@@ -9,6 +9,20 @@ export interface SealOptions {
   phase: number;
   /** Free-text note appended to the seal record. */
   note?: string;
+  /**
+   * Allow overwriting an existing sealed snapshot. Off by default —
+   * sealed files are immutable as a discipline; opt-in flag exists
+   * for cases like correcting a botched seal during the same work
+   * session before anyone else has seen it.
+   */
+  force?: boolean;
+}
+
+export class SealError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SealError';
+  }
 }
 
 export interface SealResult {
@@ -32,11 +46,17 @@ export function seal(options: SealOptions): SealResult {
 
   const now = new Date().toISOString();
   const phase = options.phase;
+  const force = options.force ?? false;
 
   const stateSrc = join(located.dir, 'STATE.md');
   const stateDest = join(sealedDir, `phase-${phase}.STATE.md`);
   if (!existsSync(stateSrc)) {
-    throw new Error('STATE.md not found; nothing to seal.');
+    throw new SealError('STATE.md not found; nothing to seal.');
+  }
+  if (existsSync(stateDest) && !force) {
+    throw new SealError(
+      `Phase ${phase} is already sealed: ${stateDest} exists. Sealed snapshots are immutable as a discipline. To correct a sealed phase, add a corrective phase to ROADMAP.md and seal that. Pass --force only if you are certain nothing else has consumed the existing seal yet.`,
+    );
   }
   copyFileSync(stateSrc, stateDest);
 
@@ -48,10 +68,12 @@ export function seal(options: SealOptions): SealResult {
   }
 
   // Update STATE.md last_sealed_phase / last_sealed_at if the lines exist.
+  // Use [ \t]* (spaces/tabs only) rather than \s* so the trailing-whitespace
+  // group never matches across newlines and eats subsequent headings.
   const stateText = readFileSync(stateSrc, 'utf8');
   const next = stateText
-    .replace(/^(\s*last_sealed_phase:\s*).*$/m, `$1${phase}`)
-    .replace(/^(\s*last_sealed_at:\s*).*$/m, `$1${now}`);
+    .replace(/^([ \t]*last_sealed_phase:)[ \t]*[^\n]*$/m, `$1 ${phase}`)
+    .replace(/^([ \t]*last_sealed_at:)[ \t]*[^\n]*$/m, `$1 ${now}`);
   if (next !== stateText) writeFileSync(stateSrc, next, 'utf8');
 
   // Append to a simple ledger for human + machine review.

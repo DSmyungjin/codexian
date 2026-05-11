@@ -100,15 +100,22 @@ export async function specCommand(rawArgs: string[]): Promise<void> {
       const phaseStr = args.positional[0];
       const phase = phaseStr ? Number.parseInt(phaseStr, 10) : NaN;
       if (!Number.isFinite(phase) || phase < 0) {
-        console.error('error: usage — codexian spec seal <phase> [--note "..."]');
+        console.error('error: usage — codexian spec seal <phase> [--note "..."] [--force]');
         process.exit(1);
       }
       const note = args.named.get('note');
-      const result = seal({ cwd, phase, note });
-      console.log(`sealed phase ${phase}`);
-      console.log(`  state:   ${result.statePath}`);
-      if (result.contextPath) console.log(`  context: ${result.contextPath}`);
-      console.log(`  ledger:  ${result.ledgerPath}`);
+      const force = args.flags.has('--force');
+      try {
+        const result = seal({ cwd, phase, note, force });
+        console.log(`sealed phase ${phase}`);
+        console.log(`  state:   ${result.statePath}`);
+        if (result.contextPath) console.log(`  context: ${result.contextPath}`);
+        console.log(`  ledger:  ${result.ledgerPath}`);
+      } catch (err) {
+        const e = err as Error;
+        console.error(`error: ${e.message}`);
+        process.exit(1);
+      }
       return;
     }
     case 'new-phase': {
