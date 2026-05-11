@@ -3,6 +3,8 @@ import {
   formatReport,
   init,
   locateSpecDir,
+  recordCompletion,
+  RecordCompletionError,
   seal,
   SPEC_DIR,
   validate,
@@ -19,6 +21,9 @@ Usage:
                                           Snapshot STATE + CONTEXT for a phase into sealed/.
                                           --advance also flips ROADMAP statuses and bumps current_phase.
   codexian spec new-phase <N> <name>       Create CONTEXT.phase-N.md from the template.
+  codexian spec record-completion <slug> [--summary "..."] [--phase N] [--evidence "<paths>"]
+                                          Record a completed unit of work in STATE.md.
+                                          Connection surface for Ralph completion → POSITION doc.
   codexian spec inject                     Print the session-start context block (for shells).
   codexian spec where                      Print the active spec directory or "none".
 
@@ -169,6 +174,38 @@ export async function specCommand(rawArgs: string[]): Promise<void> {
       const dest = writeContextDoc(cwd, n, name);
       console.log(`created: ${dest}`);
       console.log(`\nNext: run \`$spec-discuss ${n}\` inside Codex to populate this file.`);
+      return;
+    }
+    case 'record-completion': {
+      const slug = args.positional[0];
+      if (!slug) {
+        console.error('error: usage — codexian spec record-completion <slug> [--summary "..."] [--phase N] [--evidence "<paths>"]');
+        process.exit(1);
+      }
+      const summary = args.named.get('summary');
+      const phaseRaw = args.named.get('phase');
+      const phase = phaseRaw ? Number.parseInt(phaseRaw, 10) : undefined;
+      const evidenceRaw = args.named.get('evidence');
+      const evidence = evidenceRaw
+        ? evidenceRaw
+            .split(/[,\s]+/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : undefined;
+      try {
+        const result = recordCompletion({ cwd, slug, summary, phase, evidence });
+        console.log(`recorded completion: ${slug}`);
+        console.log(`  state file:          ${result.statePath}`);
+        console.log(`  recent decisions:    ${result.appendedRecentDecisions ? 'appended' : 'skipped (no ## Recent decisions section found)'}`);
+        console.log(`  active work cleanup: ${result.changedActiveWork ? 'removed slug-matching bullet(s)' : 'nothing to clear'}`);
+        console.log(`\n  ledger line:\n    ${result.ledgerLine}`);
+      } catch (err) {
+        if (err instanceof RecordCompletionError) {
+          console.error(`error: ${err.message}`);
+          process.exit(1);
+        }
+        throw err;
+      }
       return;
     }
     case 'inject': {
