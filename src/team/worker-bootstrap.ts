@@ -16,6 +16,7 @@ import {
   renderTeamWorkerGoalInstruction,
   type TeamWorkerGoalInstruction,
 } from "./goal-workflow.js";
+import { readTemplateSpecBlock } from "../spec/agents-merge.js";
 
 const TEAM_OVERLAY_START = "<!-- OMX:TEAM:WORKER:START -->";
 const TEAM_OVERLAY_END = "<!-- OMX:TEAM:WORKER:END -->";
@@ -124,7 +125,34 @@ You are operating as the **${options.workerRole}** role for this team run. Apply
 ${options.rolePromptContent.trim()}
 </team_worker_role>
 <!-- OMX:TEAM:ROLE:END -->
-`;
+${renderSpecContractFooter(options.leaderCwd)}`;
+}
+
+/**
+ * Append the codexian SPEC:CONTRACT block to the generated worker
+ * AGENTS.md when the leader project uses the spec contract.
+ *
+ * Why: OMX's team worker bootstrap *replaces* the project root
+ * AGENTS.md inside each worktree with team-specific content. Without
+ * this footer, the SPEC:CONTRACT mandatory-first-action directive
+ * authored by `codexian spec init` reaches the leader but never the
+ * workers — so workers proceed without reading PROJECT/REQUIREMENTS/
+ * ROADMAP/STATE/CONTEXT.phase-N. The spec contract is bypassed for
+ * the parallel scaling axis.
+ *
+ * Trigger: leader cwd has at least one of the candidate spec dirs
+ * (`.codexian/spec/` / `.omx/spec/` / `.spec/`). When absent, this
+ * returns an empty string and the worker AGENTS.md is unchanged.
+ */
+function renderSpecContractFooter(leaderCwd: string): string {
+  const hasSpecDir =
+    existsSync(join(leaderCwd, ".codexian", "spec")) ||
+    existsSync(join(leaderCwd, ".omx", "spec")) ||
+    existsSync(join(leaderCwd, ".spec"));
+  if (!hasSpecDir) return "";
+  const block = readTemplateSpecBlock();
+  if (!block) return "";
+  return `\n${block}\n`;
 }
 
 function tryReadGitValue(cwd: string, args: string[]): string | null {

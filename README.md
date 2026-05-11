@@ -1,4 +1,161 @@
-# oh-my-codex (OMX)
+# codexian
+
+> A hard fork of [oh-my-codex (OMX)](https://github.com/Yeachan-Heo/oh-my-codex) that adds a **typed documentation contract** on top of OMX's runtime orchestration. Codex CLI sessions resume from durable on-disk state instead of re-deriving project context each session — while `$ralph`'s throughput and `$team`'s parallel coordination remain intact.
+
+```bash
+# in your project
+node /path/to/codexian/dist/cli/omx.js spec init
+# edit .codexian/spec/PROJECT.md, REQUIREMENTS.md, ROADMAP.md
+node /path/to/codexian/dist/cli/omx.js spec validate
+# now every Codex session in this project auto-loads the spec contract
+```
+
+## Why codexian
+
+Three problems with stateless LLM coding sessions:
+
+1. **Context rot** — each session re-derives "what is this project" from scratch and gets it slightly wrong every time.
+2. **No durable phase state** — what was decided last week lives in chat memory or rotting Slack threads, not in files the next agent can read.
+3. **Parallel workers ignore project intent** — Team workers in worktrees never see the project AGENTS.md, so the same five constraints get re-discovered N times.
+
+codexian externalises project state to disk as five canonical markdown files with typed kinds, schema-validated content, and per-kind ownership rules. Every Codex session auto-loads them. Workers in `$team` worktrees inherit the same discipline. Ralph completions write back to STATE.md automatically.
+
+## The contract — five files
+
+Under `.codexian/spec/`:
+
+| File | Kind | Author | What it captures |
+|------|------|--------|------------------|
+| `PROJECT.md` | INTENT | human | Vision, non-goals, primary user, constraints, success metrics. Changes rarely. |
+| `REQUIREMENTS.md` | SCOPE | human | Functional + non-functional + out-of-scope + dependencies + risks. |
+| `ROADMAP.md` | ROADMAP | co-author | Ordered phases with goal/acceptance/dependencies. `SPEC:PLAN` markers per phase reference `plans/phase-N.PLAN.md`. |
+| `STATE.md` | POSITION | executor | `current_phase`, last seal, active work, recent decisions. The only file edited during normal work. |
+| `CONTEXT.phase-N.md` | DECISIONS | interview | Per-phase implementation decisions (D-NN ids) + acceptance criteria. Frozen on seal. |
+
+Plus `sealed/phase-N.*` snapshots (immutable, append-only `LEDGER.md`) and `generated/{MAP,PATTERNS}.md` placeholders for codebase-map and pattern-catalog kinds.
+
+## CLI surface
+
+> The binary is `omx` (codexian inherits OMX's bin name). Examples below use `omx spec …`.
+
+```
+omx spec init                              Scaffold .codexian/spec/ + merge AGENTS.md SPEC:CONTRACT + register hook + write trust hash
+omx spec doctor                            Installation integrity (files, hook, trust state, AGENTS.md, skills, Codex CLI version)
+omx spec validate                          Lint forcing functions, schema, current-phase CONTEXT, D-NN coverage, plan-check marker
+omx spec new-phase <N> <name>              Create CONTEXT.phase-N.md from template
+omx spec seal <N> [--advance]              Snapshot + LEDGER append + optional ROADMAP/current_phase advance
+omx spec record-completion <slug>          Ralph→STATE.md: log a completed unit, clear active work
+omx spec record-verify-failure <slug>      Verify-step failure→STATE.md: append fix task with root cause + evidence
+omx spec exec --prompt "<text>"            codex exec wrapper that prepends the spec contract context
+omx spec team-tasks <phase>                Extract AC bullets from CONTEXT.phase-N.md as omx team task candidates
+omx spec inject                            Print the SessionStart context envelope (for debugging)
+omx spec where                             Print the active spec directory
+```
+
+Flags worth knowing:
+- `--advance` on seal: flip ROADMAP `[~]→[x]` for phase N, `[ ]→[~]` for N+1, bump `current_phase`.
+- `--strict-active` / `--ignore-active` on seal: refuse or skip the ralph/team interlock detector.
+- `--no-agents` on init: skip merging the SPEC:CONTRACT block into the project AGENTS.md.
+- `--no-hook-register` / `--no-hook-trust` on init: opt out of the SessionStart hook entry and/or its trust hash.
+
+## How it reaches Codex
+
+Two channels — both wired automatically by `codexian spec init`:
+
+1. **AGENTS.md mandatory directive** (always-on). `codexian spec init` injects a `SPEC:CONTRACT` block into the project-root `AGENTS.md`. Codex CLI auto-loads `AGENTS.md` at session start, so the directive — *"Before producing any output, Read these five files in order"* — fires every session, every model, every runtime.
+2. **`session-start.mjs` hook with auto-trust**. `codexian spec init` also writes a SessionStart entry to `.codex/hooks.json` AND the matching trust hash to `$CODEX_HOME/config.toml`. Codex 0.129+ added a deliberate hook trust gate; we satisfy it programmatically so the hook fires as proper `additionalContext` system input without any TUI / `/hooks` step on the user's side.
+
+### Codex CLI version note
+
+Codex 0.129 introduced a hook trust gate that initially looked like a regression to outside observers (see [openai/codex#21639](https://github.com/openai/codex/issues/21639)). It is a security feature — the dispatcher refuses to invoke hooks whose entry has not been trusted. `codexian spec init` writes the trust hash on your behalf, so:
+
+| Codex CLI version | Status with codexian |
+|---|---|
+| 0.128.0 (pre-gate) | hook fires; trust write is harmless |
+| 0.129.0+ | hook fires (auto-trusted by `spec init`) |
+
+`codexian spec doctor` separately reports:
+- `codex CLI version` — INFO with whether the trust gate is active
+- `codex hook registration` — PASS / WARN / FAIL based on `hooks.json` entry presence and trust state in `config.toml`
+
+If you really want to opt out of the hook channel, `codexian spec init --no-hook-register` keeps things AGENTS.md-only. `--no-hook-trust` writes the entry but skips the trust hash (useful if you prefer manually trusting via TUI `/hooks`).
+
+For the full mechanism — trust key shape, hash algorithm, doctor outcomes, caveats — see [docs/codex-hook-trust-gate.md](./docs/codex-hook-trust-gate.md).
+
+Team workers in `$team` worktrees receive the same SPEC:CONTRACT block automatically — codexian patches OMX's worker AGENTS.md generator to append the contract when the leader cwd uses a spec dir.
+
+## DocKind taxonomy
+
+```
+INTENT     mutable   always-load    human       (PROJECT.md)
+SCOPE      mutable   always-load    human       (REQUIREMENTS.md)
+ROADMAP    mutable   always-load    co-author   (ROADMAP.md)
+POSITION   mutable   always-load    executor    (STATE.md — only freely-editable kind)
+DECISIONS  m→frozen  phase-entry    interview   (CONTEXT.phase-N.md, sealed after seal)
+PLAN       frozen    phase-entry    agent       (plans/phase-N.PLAN.md, plan-check gated, ROADMAP keeps a back-compat marker reference)
+HISTORY    append    never-load     system      (sealed/, LEDGER.md)
+MAP        regen     on-demand      agent       (generated/MAP.md, owned by $spec-map)
+PATTERNS   regen     on-demand      agent       (generated/PATTERNS.md, owned by $spec-patterns)
+VERIFY     frozen    on-demand      agent       (per-phase, owned by $spec-verify)
+```
+
+Each kind has explicit forcing-function rules. The validator enforces them: a forcing-function doc with `_TODO_` in a required section fails validation; an always-load doc exceeding its size budget warns; a CONTEXT D-ID not referenced from the phase's plan section is a hard error.
+
+## Skills — `$spec-*`
+
+Eight wrapper skills installed by `omx setup`, one per owner kind:
+
+```
+$spec-discuss        capture phase decisions into CONTEXT.phase-N.md
+$spec-plan           consensus planning + architect plan-check, persisted to plans/phase-N.PLAN.md
+$spec-roadmap        edit ROADMAP.md at phase boundaries
+$spec-state-update   structured POSITION doc edits (protects last_sealed_*)
+$spec-seal           phase completion gate — walks acceptance criteria
+$spec-map            generate codebase architecture map (on-demand)
+$spec-patterns       generate pattern catalog (on-demand)
+$spec-verify         per-phase verification report
+```
+
+## Compared to upstream OMX
+
+codexian is *not* a replacement. It augments OMX:
+
+| | OMX | codexian |
+|---|---|---|
+| Codex CLI integration | ✓ | ✓ (inherited) |
+| `$ralph` warm-context loop | ✓ | ✓ (inherited) |
+| `$team` tmux + worktree | ✓ | ✓ (inherited, + spec contract injection) |
+| `$ultragoal` multi-goal | ✓ | ✓ (inherited) |
+| Documentation contract | trace-only `.omx/` | typed kinds, validator, taxonomy, owner skills |
+| Phase ledger | — | sealed snapshots + append-only LEDGER |
+| Ralph completion ↔ project state | one-way (in `.omx/`) | `spec record-completion` writes back to STATE.md |
+| Verify failure ↔ next session | chat memory only | `spec record-verify-failure` queues fix task in STATE.md Active work |
+| Seal vs active ralph/team | unaware | `--strict-active` interlock |
+| Plan goal-alignment | implicit (planner output) | architect plan-check gate + marker in plan file |
+
+If you don't want the spec contract, `--no-agents` opt-out and `OMX_SPEC_DISABLE` keep OMX behaving like upstream.
+
+## Status
+
+- **Phase 1** Spec contract foundation — `[x]` sealed
+- **Phase 2** Self-application + verification harness + Decision-ID coverage gate — `[x]` sealed
+- **Phase 3** Codex hook auto-registration + trust hash — `[x]` sealed (the early "upstream regression" framing was wrong; Codex 0.129+ requires a trust hash, which `omx spec init` writes for you)
+- **Phase 4** Validation depth and scope sealing — `[x]` sealed across three chunks: verify-failure auto-append surface, PLAN file split out of ROADMAP, plan-checker blocking gate (architect approval marker)
+
+Full self-application: this repo's own `.codexian/spec/` carries the contract — every commit in phase 1–4 was made with the contract enforcing itself.
+
+## Docs
+
+- **[Getting started — codexian on a new project](./docs/getting-started-codexian.md)** — step-by-step bootstrap (install → init → fill 3 forcing docs → validate → first phase loop → seal)
+- [Spec contract walkthrough](./docs/spec-contract.md) — deeper mechanics
+- [Spec taxonomy](./docs/spec-taxonomy.md) — 10 doc kinds, four teaching channels
+- [Codex hook trust gate](./docs/codex-hook-trust-gate.md) — why the 0.129 trust write is needed
+- Codexian's own self-applied spec — read [.codexian/spec/PROJECT.md](./.codexian/spec/PROJECT.md) and [.codexian/spec/ROADMAP.md](./.codexian/spec/ROADMAP.md) of this repo
+- Upstream OMX feature surface remains documented below (OMX inheritance section)
+
+---
+
+# oh-my-codex (OMX) — Upstream foundation
 
 <p align="center">
   <img src="https://yeachan-heo.github.io/oh-my-codex-website/omx-character-nobg.png" alt="oh-my-codex character" width="280">
@@ -319,6 +476,7 @@ If this happens, try:
 
 ## Documentation
 
+- [Spec Contract](./docs/spec-contract.md) — codexian's documentation-first discipline (`.codexian/spec/`)
 - [Getting Started](./docs/getting-started.html)
 - [Demo guide](./DEMO.md)
 - [Wiki feature](./docs/wiki-feature.md)

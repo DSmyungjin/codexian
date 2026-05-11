@@ -945,6 +945,46 @@ describe("worker bootstrap", () => {
     assert.doesNotMatch(content, /# User Instructions/);
   });
 
+  it("generateWorkerRootAgentsContent appends SPEC:CONTRACT footer when leader cwd has a spec dir", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-worker-spec-footer-"));
+    try {
+      await mkdir(join(cwd, ".codexian", "spec"), { recursive: true });
+      const content = generateWorkerRootAgentsContent({
+        teamName: "spec-team",
+        workerName: "worker-1",
+        workerRole: "executor",
+        rolePromptContent: "<identity>exec.</identity>",
+        teamStateRoot: join(cwd, ".omx", "state"),
+        leaderCwd: cwd,
+        worktreePath: join(cwd, ".omx", "team", "spec-team", "worktrees", "worker-1"),
+      });
+      assert.match(content, /<!-- SPEC:CONTRACT:START -->/);
+      assert.match(content, /<!-- SPEC:CONTRACT:END -->/);
+      assert.match(content, /Mandatory first action/);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("generateWorkerRootAgentsContent omits SPEC:CONTRACT footer when no spec dir exists", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-worker-no-spec-"));
+    try {
+      const content = generateWorkerRootAgentsContent({
+        teamName: "plain-team",
+        workerName: "worker-1",
+        workerRole: "executor",
+        rolePromptContent: "<identity>exec.</identity>",
+        teamStateRoot: join(cwd, ".omx", "state"),
+        leaderCwd: cwd,
+        worktreePath: join(cwd, ".omx", "team", "plain-team", "worktrees", "worker-1"),
+      });
+      assert.doesNotMatch(content, /SPEC:CONTRACT/);
+      assert.doesNotMatch(content, /Mandatory first action/);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
   it("writeWorkerWorktreeRootAgentsFile writes disposable root AGENTS and remove restores tracked content", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "omx-worker-root-agents-"));
     const worktree = join(cwd, "worktree");

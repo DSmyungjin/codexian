@@ -347,6 +347,7 @@ type CliCommand =
   | "deepinit"
   | "uninstall"
   | "doctor"
+  | "spec"
   | "cleanup"
   | "ask"
   | "question"
@@ -1234,6 +1235,7 @@ export async function main(args: string[]): Promise<void> {
     "deepinit",
     "uninstall",
     "doctor",
+    "spec",
     "cleanup",
     "ask",
     "question",
@@ -1324,6 +1326,11 @@ export async function main(args: string[]): Promise<void> {
       case "doctor": {
         const { doctor } = await import("./doctor.js");
         await doctor(options);
+        break;
+      }
+      case "spec": {
+        const { specCommand } = await import("./spec.js");
+        await specCommand(args.slice(1));
         break;
       }
       case "ask":
