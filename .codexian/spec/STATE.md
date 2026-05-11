@@ -36,9 +36,11 @@ last_sealed_at: 2026-05-11T10:50:19.294Z
 
 <!-- What is being worked on right now. Updated by executors. -->
 
-- Implementing verify-failure auto-append surface (phase 4): `codexian spec record-verify-failure` CLI + `$spec-verify` skill wiring
+- Phase 4 chunk 2: splitting PLAN bodies out of ROADMAP into `.codexian/spec/plans/phase-N.PLAN.md` (extractor rewire + hook load + kind hint + tests)
 
 ## Recent decisions
+
+- 2026-05-11T10:58:11Z — Starting phase 4 chunk 2 (PLAN file split). Phase 3 is sealed (the "upstream regression" framing turned out wrong — Codex 0.129+ requires a trust hash, which `registerHook` now writes automatically). The phase-4 Goal/CONTEXT preamble has been corrected to drop the stale "upstream-blocked" language.
 
 - 2026-05-11T10:31:16Z — Opened phase 4 (Validation depth and scope sealing) and flipped phase 3 to `[!]` blocked pending upstream Codex hook fix. Phase 3 verify evidence (Ralph runs on Codex 0.128 / 0.130 / 0.131-alpha) is sufficient to know the upstream regression is real; we wait rather than implement against a broken target.
 

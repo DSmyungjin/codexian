@@ -29,10 +29,26 @@ $spec-plan <phase-number> [--interactive] [--deliberate]
    - All decisions in `CONTEXT.phase-N.md`
    - Any constraints inherited from `PROJECT.md` and `REQUIREMENTS.md`
 4. When `$ralplan` produces an approved plan, persist it:
-   - Append the plan summary under the phase entry in `ROADMAP.md`
-     (between `<!-- SPEC:PLAN:START phase-N -->` and
-     `<!-- SPEC:PLAN:END phase-N -->` markers; insert the markers if
-     missing).
+   - Write the plan body to `.codexian/spec/plans/phase-N.PLAN.md`
+     (canonical location since phase 4 chunk 2). Include kind +
+     schema markers at the top:
+     ```
+     <!-- SPEC:DOC:PLAN -->
+     <!-- spec:kind: PLAN -->
+     <!-- spec:author: agent -->
+     <!-- spec:mutability: frozen -->
+     <!-- spec:load: phase-entry -->
+     <!-- schema_version: 1 -->
+     ```
+   - Ensure each `D-NN` listed in `CONTEXT.phase-N.md` appears at
+     least once in the plan body — the validator's coverage gate
+     will refuse with an error otherwise.
+   - In `ROADMAP.md`, leave the phase entry intact and place a
+     1-line reference inside the existing
+     `<!-- SPEC:PLAN:START phase-N -->` / `END` markers:
+     `See [plans/phase-N.PLAN.md](plans/phase-N.PLAN.md).`. Insert
+     the markers if missing. The marker block is back-compat for
+     tooling that grepped the ROADMAP plan section before phase 4.
    - Update `STATE.md`:
      - `current_phase` stays at N
      - Append a line to `## Recent decisions` recording the
@@ -47,9 +63,11 @@ $spec-plan <phase-number> [--interactive] [--deliberate]
   decisions exist on disk *before* the plan. Skipping `$spec-discuss`
   is the most common failure mode and yields plans that drift from
   user intent.
-- **Plan files are owned by the plan markers in ROADMAP.md** — do
-  not create separate plan files outside the spec directory unless
-  the user explicitly asks.
+- **The plan file is the canonical artifact.** Write
+  `plans/phase-N.PLAN.md`; the ROADMAP marker block holds only a
+  1-line back-compat reference. Do not create plan files outside
+  `.codexian/spec/plans/` and do not put plan bodies back into
+  ROADMAP markers.
 - **Do not modify CONTEXT.phase-N.md** from this skill. Plans
   consume context; they don't rewrite it. If the planning loop
   surfaces a new decision, surface that to the user and recommend

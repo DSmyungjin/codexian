@@ -8,7 +8,7 @@
 
 # CONTEXT — Phase 4: Validation depth and scope sealing
 
-> Phase 4 ships the verify/plan/scope tightening that GSD has and codexian deferred in v1. Phase 3 is `[!]` blocked on upstream Codex hooks; phase 4 progresses in parallel.
+> Phase 4 ships the verify/plan/scope tightening that GSD has and codexian deferred in v1. (Earlier framing said phase 3 was upstream-blocked; that was wrong — phase 3 is sealed as of 2026-05-11T10:50Z.)
 
 ## Layout / shapes
 
@@ -49,6 +49,14 @@
 - **D-05** — Section auto-creation: if STATE.md lacks `## Active work`, the recorder creates the section (inserted before `## Recent decisions` if present, else appended at end). Same defensive pattern as `record-completion` but for the add direction.
 - **D-06** — Skill integration shape: `$spec-verify` calls the CLI via shell-out (not a TypeScript import) — keeps the skill prompt portable across runtimes and avoids re-coupling skills to module internals. CLI parity with `record-completion` ensures the same pattern is available to other skills.
 
+### PLAN file split (chunk 2)
+
+- **D-07** — New directory `.codexian/spec/plans/`, one file per planned phase named `phase-N.PLAN.md`. Each file carries `<!-- spec:kind: PLAN -->` and `<!-- schema_version: 1 -->`. ROADMAP no longer hosts plan bodies; it hosts a 1-line reference inside the existing `<!-- SPEC:PLAN:START phase-N -->` / `END` markers so back-compat tooling that already grepped the markers still finds them.
+- **D-08** — Migration direction is one-way at this commit: the bodies of the phase-2 and phase-3 SPEC:PLAN sections move into the new files, with the ROADMAP marker body collapsed to `See [phase-N.PLAN.md](plans/phase-N.PLAN.md).`. Phase-1 has no SPEC:PLAN section; no migration needed.
+- **D-09** — Extractor priority: `extractPlanDecisionRefs(specDir, phase)` reads `plans/phase-N.PLAN.md` first. If that file exists, its body is the canonical plan source — the ROADMAP marker body is ignored even if present (the 1-line reference would otherwise show up as zero D-IDs anyway). If the plan file does not exist, fall back to the ROADMAP SPEC:PLAN markers (legacy path). Both-absent → returns `null` (gate no-op, D-04 from phase 2 still holds).
+- **D-10** — Hook behavior: `templates/spec/hooks/session-start.mjs` (and the installed copy under `.codexian/spec/hooks/`) load `plans/phase-N.PLAN.md` after `CONTEXT.phase-N.md` when both exist. Plan file is `phase-entry` load policy under DOC_KIND_SPECS — its inclusion in the hook matches that policy. Silent skip when absent.
+- **D-11** — Validation: `FILENAME_KIND_HINTS` gains an entry mapping `plans/phase-N.PLAN.md` to `PLAN`. PLAN is non-forcing, so empty required sections do not trip the validator. Size budget warning (300 lines) still applies per existing per-kind rules.
+
 ## Acceptance criteria
 
 - AC-1: `src/spec/record-verify-failure.ts` exports `recordVerifyFailure({slug, fixTask, rootCause?, phase?, evidence?})` and `RecordVerifyFailureError`. STATE.md `## Active work` receives a bullet matching D-02 format; `## Recent decisions` receives a fresh ledger line every call.
@@ -56,7 +64,16 @@
 - AC-3: Idempotency: calling the function twice with the same slug appends one Active-work bullet (D-03), but two Recent-decisions lines.
 - AC-4: `skills/spec-verify/SKILL.md` documents the fail/partial → CLI call seam (D-06) so future authors of the skill body know to wire the call when implementing the full VERIFY artifact flow.
 - AC-5: Unit tests under `src/spec/__tests__/record-verify-failure.test.ts` cover positive (single failure recorded), idempotency (duplicate slug suppressed in Active work), section-auto-create (missing Active work section), missing STATE.md (error path), and missing/empty slug (error path). Tests pass under `node --test dist/spec/__tests__/record-verify-failure.test.js`.
-- AC-6: `codexian spec validate` continues to report OK at repo root after the new surfaces land. The phase-4 CONTEXT D-NN coverage gate sits at no-op until a SPEC:PLAN section for phase 4 exists in ROADMAP (D-04 from phase 2).
+- AC-6: `codexian spec validate` continues to report OK at repo root after the new surfaces land. The phase-4 CONTEXT D-NN coverage gate sits at no-op until a SPEC:PLAN section (or `plans/phase-4.PLAN.md`) for phase 4 exists.
+
+### PLAN split (chunk 2) acceptance
+
+- AC-7: `.codexian/spec/plans/phase-2.PLAN.md` and `phase-3.PLAN.md` exist, carry kind+schema markers, and hold the body that was inside the corresponding ROADMAP SPEC:PLAN markers before this chunk. ROADMAP marker bodies collapsed to 1-line references.
+- AC-8: `extractPlanDecisionRefs(specDir, phase)` reads from the plan file when present, falls back to ROADMAP markers when not, returns `null` only when both surfaces are absent. Existing coverage gate behavior (missing=error, extra=warning, no-plan=no-op) is unchanged from the caller's POV.
+- AC-9: `templates/spec/hooks/session-start.mjs` and the installed `.codexian/spec/hooks/session-start.mjs` inject the current-phase PLAN file (when present) as an additional block in the session-start envelope. `phase-entry` load policy is satisfied.
+- AC-10: `FILENAME_KIND_HINTS` in `src/spec/contract.ts` maps `plans/phase-N.PLAN.md` to `PLAN`. Validator recognises the file kind; no false positives.
+- AC-11: `skills/spec-plan/SKILL.md` describes the new persistence target (plan file) and clarifies that ROADMAP markers receive a 1-line back-compat reference only.
+- AC-12: Unit tests cover (a) plan file present takes priority, (b) plan file absent + ROADMAP marker present uses fallback, (c) both absent → null. All pass under `node --test`.
 
 ## Notes for the executor
 
