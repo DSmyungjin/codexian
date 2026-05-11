@@ -135,7 +135,10 @@ If you don't want the spec contract, `--no-agents` opt-out and `OMX_SPEC_DISABLE
 
 ## Docs
 
-- [Spec contract walkthrough](./docs/spec-contract.md)
+- **[Getting started — codexian on a new project](./docs/getting-started-codexian.md)** — step-by-step bootstrap (install → init → fill 3 forcing docs → validate → first phase loop → seal)
+- [Spec contract walkthrough](./docs/spec-contract.md) — deeper mechanics
+- [Spec taxonomy](./docs/spec-taxonomy.md) — 10 doc kinds, four teaching channels
+- [Codex hook trust gate](./docs/codex-hook-trust-gate.md) — why the 0.129 trust write is needed
 - Codexian's own self-applied spec — read [.codexian/spec/PROJECT.md](./.codexian/spec/PROJECT.md) and [.codexian/spec/ROADMAP.md](./.codexian/spec/ROADMAP.md) of this repo
 - Upstream OMX feature surface remains documented below (OMX inheritance section)
 
