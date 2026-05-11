@@ -28,11 +28,33 @@ $spec-plan <phase-number> [--interactive] [--deliberate]
    - The phase entry in `ROADMAP.md` (goal, acceptance, dependencies)
    - All decisions in `CONTEXT.phase-N.md`
    - Any constraints inherited from `PROJECT.md` and `REQUIREMENTS.md`
-4. When `$ralplan` produces an approved plan, persist it:
+4. When `$ralplan` produces a **draft** plan, gate it through the
+   plan-checker before persistence (phase 4 chunk 3 blocking gate):
+   - Hand the draft to an **architect-tier reviewer** with the same
+     context loaded in step 2 (PROJECT, REQUIREMENTS, ROADMAP entry,
+     CONTEXT.phase-N.md) plus the draft body. Ask: *does this plan
+     actually accomplish the phase goal as stated, does it cover the
+     acceptance criteria, and does it stay inside REQUIREMENTS?*
+   - Reviewer returns one of:
+     - `approved` — proceed to persistence.
+     - `rejected` with one or more **structured reasons** — re-run
+       `$ralplan` (same step 3 inputs) appending the rejection reasons
+       as planning constraints. Loop. **Round cap: 3.** After three
+       failed rounds, surface to the user: *"the plan and the goal are
+       out of alignment — refine CONTEXT.phase-N.md first, or escalate."*
+   - This sits on top of (not instead of) the Decision-ID coverage gate
+     in step 5 below. Plan-check is an architect approval; coverage is
+     a structural completeness check.
+5. When the plan is plan-check approved, persist it:
    - Write the plan body to `.codexian/spec/plans/phase-N.PLAN.md`
-     (canonical location since phase 4 chunk 2). Include kind +
-     schema markers at the top:
+     (canonical location since phase 4 chunk 2). Lead with the
+     plan-check marker block, then the kind + schema markers:
      ```
+     <!-- spec:plan-check: approved -->
+     <!-- spec:plan-check-rationale: <reviewer one-liner> -->
+     <!-- spec:plan-check-reviewer: architect -->
+     <!-- spec:plan-check-at: <ISO timestamp> -->
+
      <!-- SPEC:DOC:PLAN -->
      <!-- spec:kind: PLAN -->
      <!-- spec:author: agent -->
@@ -52,8 +74,8 @@ $spec-plan <phase-number> [--interactive] [--deliberate]
    - Update `STATE.md`:
      - `current_phase` stays at N
      - Append a line to `## Recent decisions` recording the
-       plan-approval moment.
-5. Print the path to the updated ROADMAP and STATE plus the
+       plan-approval moment and the plan-check verdict.
+6. Print the path to the updated ROADMAP and STATE plus the
    recommended next command (typically `$ralph` or `$team` against
    the freshly planned phase).
 
@@ -72,6 +94,14 @@ $spec-plan <phase-number> [--interactive] [--deliberate]
   consume context; they don't rewrite it. If the planning loop
   surfaces a new decision, surface that to the user and recommend
   re-running `$spec-discuss <N>` for the addition.
+- **Never persist a plan that has not passed the plan-check gate.**
+  Coverage-complete is not enough — an architect must approve goal
+  alignment. The `<!-- spec:plan-check: approved -->` marker is the
+  durable evidence of that approval; absence of the marker on a
+  current-phase plan triggers a validator warning.
+- **Sealed-phase plans are immutable.** Plans for phases marked `[x]`
+  in ROADMAP predate the plan-check gate. Do not add the marker to
+  sealed plan files retroactively — the validator already exempts them.
 
 ## Flags passed through to $ralplan
 

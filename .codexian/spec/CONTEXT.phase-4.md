@@ -57,6 +57,21 @@
 - **D-10** — Hook behavior: `templates/spec/hooks/session-start.mjs` (and the installed copy under `.codexian/spec/hooks/`) load `plans/phase-N.PLAN.md` after `CONTEXT.phase-N.md` when both exist. Plan file is `phase-entry` load policy under DOC_KIND_SPECS — its inclusion in the hook matches that policy. Silent skip when absent.
 - **D-11** — Validation: `FILENAME_KIND_HINTS` gains an entry mapping `plans/phase-N.PLAN.md` to `PLAN`. PLAN is non-forcing, so empty required sections do not trip the validator. Size budget warning (300 lines) still applies per existing per-kind rules.
 
+### plan-checker blocking gate (chunk 3)
+
+- **D-12** — The plan-checker is **integrated into `$spec-plan`** (not a new CLI subcommand). After `$ralplan` produces a draft plan and before persistence, the skill invokes an architect-tier reviewer with PROJECT/REQUIREMENTS/ROADMAP/CONTEXT.phase-N + the draft plan body. Reviewer produces a verdict: `approved`, or `rejected` with structured reasons. This sits on top of (not instead of) the existing Decision-ID coverage gate.
+- **D-13** — Verdict persistence: on `approved`, the skill writes an HTML-comment marker block at the top of `plans/phase-N.PLAN.md`:
+  ```
+  <!-- spec:plan-check: approved -->
+  <!-- spec:plan-check-rationale: <reviewer one-liner> -->
+  <!-- spec:plan-check-reviewer: architect -->
+  <!-- spec:plan-check-at: <ISO timestamp> -->
+  ```
+  The marker is a plain comment so it travels with the file under all the existing kind/schema rules.
+- **D-14** — Validator behavior: when STATE.md's `current_phase` is N and `plans/phase-N.PLAN.md` exists, the validator looks for the `spec:plan-check: approved` marker. Missing → **WARN** (advisory, not error). Rationale: the gate's hard rejection lives in the skill prompt; validate's job is to *surface* the missing marker so the next agent sees it, not to brick on it.
+- **D-15** — Sealed-phase exemption: plan files for phases marked `[x]` in ROADMAP predate this gate. The validator skips the marker check for any phase whose ROADMAP status is `[x]`. So `plans/phase-2.PLAN.md` and `plans/phase-3.PLAN.md` do not get nagged.
+- **D-16** — Rejection loop: when reviewer rejects, `$spec-plan` re-runs `$ralplan` with the rejection reasons appended as a planning constraint. Maximum 3 rounds before surfacing the failure to the user with a "the plan and the goal are out of alignment — refine CONTEXT.phase-N.md first or escalate" prompt. The skill prompt enforces this round-cap.
+
 ## Acceptance criteria
 
 - AC-1: `src/spec/record-verify-failure.ts` exports `recordVerifyFailure({slug, fixTask, rootCause?, phase?, evidence?})` and `RecordVerifyFailureError`. STATE.md `## Active work` receives a bullet matching D-02 format; `## Recent decisions` receives a fresh ledger line every call.
@@ -74,6 +89,14 @@
 - AC-10: `FILENAME_KIND_HINTS` in `src/spec/contract.ts` maps `plans/phase-N.PLAN.md` to `PLAN`. Validator recognises the file kind; no false positives.
 - AC-11: `skills/spec-plan/SKILL.md` describes the new persistence target (plan file) and clarifies that ROADMAP markers receive a 1-line back-compat reference only.
 - AC-12: Unit tests cover (a) plan file present takes priority, (b) plan file absent + ROADMAP marker present uses fallback, (c) both absent → null. All pass under `node --test`.
+
+### plan-checker (chunk 3) acceptance
+
+- AC-13: `skills/spec-plan/SKILL.md` describes the architect-approval gate (D-12), the marker block written on approve (D-13), the sealed-phase exemption (D-15), and the rejection loop with the 3-round cap (D-16).
+- AC-14: `src/spec/validate.ts` emits a `warning` when STATE's `current_phase` has a plan file at `plans/phase-N.PLAN.md` and the file lacks the `<!-- spec:plan-check: approved -->` marker. The warning includes a hint to run `$spec-plan <N>` again or add the marker manually.
+- AC-15: Sealed-phase exemption (D-15) — when a phase's ROADMAP status is `[x]`, the validator does not emit the plan-check marker warning for that phase. Confirmed by unit test.
+- AC-16: `.codexian/spec/plans/phase-4.PLAN.md` exists (self-application), cites every D-NN from CONTEXT.phase-4.md (D-01 through D-16), carries the `spec:plan-check: approved` marker block, and `omx spec validate` returns OK with no plan-check WARN for phase 4.
+- AC-17: Unit tests cover (a) current-phase plan file without marker → WARN, (b) current-phase plan file with marker → no WARN, (c) sealed-phase plan file without marker → no WARN (exemption). All pass under `node --test`.
 
 ## Notes for the executor
 
