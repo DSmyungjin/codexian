@@ -40,6 +40,12 @@ last_sealed_at: 2026-05-11T06:27:43.644Z
 
 ## Recent decisions
 
+- 2026-05-11T08:19:52.063Z — Ralph completed: verify-ralph-mode (phase 2) — Ralph completion audit passed with 5 spec files read + AC-5 next-improvement identified Evidence: .codexian/spec/verify/PHASE-2-RALPH-RUN-20260511T064510Z.md.
+
+- 2026-05-11T08:19:51.951Z — Ralph completed: verify-skill-path (phase 2) — spec-state-update skill applies allowed change + refuses forbidden last_sealed_phase edit Evidence: .codexian/spec/verify/PHASE-2-SKILL-RUN-20260511T063715Z.md.
+
+- 2026-05-11T08:19:51.835Z — Ralph completed: verify-agents-md-path (phase 2) — Codex exec reads 5 spec files + correct Q1/Q2 with line-number citations Evidence: .codexian/spec/verify/PHASE-2-RUN-20260511T063416Z.md.
+
 - 2026-05-11T08:15:34Z — Adopted `D-NN` decision ID format and added plan-coverage gate to `codexian spec validate`. See CONTEXT.phase-2.md D-01..D-05.
 - 2026-05-11T06:27:43.644Z — Sealed phase 1 and advanced to phase 2.
 
