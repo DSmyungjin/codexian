@@ -1,3 +1,4 @@
+import { execFileSync } from 'child_process';
 import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { homedir } from 'os';
 import { basename, join } from 'path';
@@ -284,6 +285,71 @@ function checkOwnerSkills(cwd: string): CheckResult {
   };
 }
 
+/**
+ * Codex CLI version detector. The SessionStart hook regression
+ * (openai/codex issue #21639) makes `.codex/hooks.json` entries not
+ * fire on Codex 0.129.0 and later as of 2026-05-11 (verified
+ * empirically against 0.128.0 / 0.130.0 / 0.131.0-alpha.4). The
+ * codexian spec contract still works via the AGENTS.md mandatory
+ * directive fallback, but the hook channel — which is stricter
+ * system context — is silently disabled. Surface that as a WARN
+ * with the version + a recommendation.
+ */
+const HOOK_REGRESSION_MIN_MAJOR = 0;
+const HOOK_REGRESSION_MIN_MINOR = 129;
+const HOOK_WORKING_RECOMMENDATION = '0.128.0';
+
+function checkCodexVersion(): CheckResult {
+  let raw: string;
+  try {
+    raw = execFileSync('codex', ['--version'], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 3000,
+    }).trim();
+  } catch {
+    return {
+      name: 'codex CLI version',
+      status: 'INFO',
+      detail: 'codex binary not on PATH or `codex --version` failed — skipping version check',
+    };
+  }
+  // Expected shape: "codex-cli 0.130.0" or similar.
+  const m = raw.match(/(\d+)\.(\d+)\.(\d+)(?:-[\w.-]+)?/);
+  if (!m) {
+    return {
+      name: 'codex CLI version',
+      status: 'INFO',
+      detail: `unrecognised version output: "${raw}"`,
+    };
+  }
+  const major = Number.parseInt(m[1], 10);
+  const minor = Number.parseInt(m[2], 10);
+  const version = m[0]; // full matched version including any -alpha tag
+  const affected =
+    major > HOOK_REGRESSION_MIN_MAJOR ||
+    (major === HOOK_REGRESSION_MIN_MAJOR && minor >= HOOK_REGRESSION_MIN_MINOR);
+  if (!affected) {
+    return {
+      name: 'codex CLI version',
+      status: 'PASS',
+      detail: `${version} — SessionStart hooks fire normally`,
+    };
+  }
+  return {
+    name: 'codex CLI version',
+    status: 'WARN',
+    detail:
+      `${version} is affected by the SessionStart hook regression ` +
+      `(openai/codex#21639 — confirmed on 0.130.0 and 0.131.0-alpha.4). ` +
+      `The spec contract still loads via the AGENTS.md mandatory directive ` +
+      `(verified working), but the .codex/hooks.json channel is silently ` +
+      `disabled. To restore the hook channel, pin to ${HOOK_WORKING_RECOMMENDATION}: ` +
+      `\`npm install -g @openai/codex@${HOOK_WORKING_RECOMMENDATION}\`. ` +
+      `When upstream resolves the regression, update this check.`,
+  };
+}
+
 function summariseState(specDir: string): CheckResult[] {
   const out: CheckResult[] = [];
   const state = join(specDir, 'STATE.md');
@@ -315,6 +381,7 @@ export function doctor(cwd: string = process.cwd()): DoctorReport {
 
   checks.push(checkAgentsHeritage(cwd));
   checks.push(checkOwnerSkills(cwd));
+  checks.push(checkCodexVersion());
 
   if (located) {
     checks.push(...summariseState(located));
