@@ -10,3 +10,4 @@ export {
   type RecordCompletionOptions,
   type RecordCompletionResult,
 } from './record-completion.js';
+export { readTemplateSpecBlock, mergeAgentsHeritage, type AgentsMergeAction, type AgentsMergeResult } from './agents-merge.js';

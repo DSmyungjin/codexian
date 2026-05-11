@@ -66,6 +66,22 @@ function findRealBlock(text: string): { start: number; end: number } | null {
   return { start: startMatch.index, end: endIndex };
 }
 
+/**
+ * Public accessor — returns the SPEC:CONTRACT block (with markers) from
+ * the shipped templates/AGENTS.md, or null if the install is corrupt.
+ * Used by Team worker bootstrap to inject the spec discipline into
+ * generated worker AGENTS.md files (which otherwise replace the
+ * project AGENTS.md entirely and drop the SPEC:CONTRACT block on
+ * the floor).
+ */
+export function readTemplateSpecBlock(): string | null {
+  try {
+    return extractSpecBlock();
+  } catch {
+    return null;
+  }
+}
+
 function extractSpecBlock(): string {
   const path = templatesAgentsPath();
   if (!existsSync(path)) {
