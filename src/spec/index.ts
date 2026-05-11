@@ -18,3 +18,11 @@ export {
 } from './record-verify-failure.js';
 export { readTemplateSpecBlock, mergeAgentsHeritage, type AgentsMergeAction, type AgentsMergeResult } from './agents-merge.js';
 export { execWrapper, type ExecWrapperArgs, type ExecWrapperResult } from './exec-wrapper.js';
+export {
+  extractTeamTasks,
+  formatTeamTasks,
+  TeamTasksError,
+  type TeamTaskCandidate,
+  type TeamTasksOptions,
+  type FormatOptions,
+} from './team-tasks.js';

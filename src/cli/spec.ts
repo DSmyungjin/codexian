@@ -37,6 +37,9 @@ Usage:
                                           context to the prompt, bypassing the SessionStart
                                           hook regression on Codex 0.129+. All non-prompt
                                           flags are forwarded verbatim to \`codex exec\`.
+  codexian spec team-tasks <phase> [--format human|json|ndjson|team-create]
+                                          Extract AC-N bullets from CONTEXT.phase-N.md as
+                                          candidate \`omx team\` tasks (one per AC).
 
 Options for init:
   --force        Overwrite existing spec files (default: skip).
@@ -319,6 +322,36 @@ export async function specCommand(rawArgs: string[]): Promise<void> {
       const { execWrapper } = await import('../spec/index.js');
       const result = await execWrapper({ rawArgs: rest, cwd });
       if (result.code !== 0) process.exit(result.code);
+      return;
+    }
+    case 'team-tasks': {
+      const phaseStr = args.positional[0];
+      const phase = phaseStr ? Number.parseInt(phaseStr, 10) : NaN;
+      if (!Number.isFinite(phase) || phase < 1) {
+        console.error('error: usage — codexian spec team-tasks <phase> [--format human|json|ndjson|team-create]');
+        process.exit(1);
+      }
+      const formatRaw = args.named.get('format') ?? 'human';
+      if (!['human', 'json', 'ndjson', 'team-create'].includes(formatRaw)) {
+        console.error(`error: unknown --format "${formatRaw}". Use human | json | ndjson | team-create.`);
+        process.exit(1);
+      }
+      const { extractTeamTasks, formatTeamTasks, TeamTasksError } = await import('../spec/index.js');
+      try {
+        const tasks = extractTeamTasks({ cwd, phase });
+        if (tasks.length === 0) {
+          console.error(`note: no AC-N bullets found in CONTEXT.phase-${phase}.md "## Acceptance criteria" section. Nothing to emit.`);
+          process.exit(0);
+        }
+        const out = formatTeamTasks(tasks, { format: formatRaw as 'human' | 'json' | 'ndjson' | 'team-create' });
+        console.log(out);
+      } catch (err) {
+        if (err instanceof TeamTasksError) {
+          console.error(`error: ${err.message}`);
+          process.exit(1);
+        }
+        throw err;
+      }
       return;
     }
     default:
