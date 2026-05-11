@@ -3,9 +3,10 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 import {
+  CONTEXT_TEMPLATE,
+  GENERATED_DIR,
   HOOK_FILENAME,
   REQUIRED_DOCS,
-  CONTEXT_TEMPLATE,
   SPEC_DIR,
 } from './contract.js';
 
@@ -43,10 +44,14 @@ export function init(options: InitOptions = {}): InitResult {
   const skipped: string[] = [];
   const tplRoot = templatesRoot();
 
+  mkdirSync(join(specDir, GENERATED_DIR), { recursive: true });
+
   const filesToCopy: [string, string][] = [
     ...REQUIRED_DOCS.map((name) => [name, name] as [string, string]),
     [CONTEXT_TEMPLATE, CONTEXT_TEMPLATE],
     [join('hooks', HOOK_FILENAME), join('hooks', HOOK_FILENAME)],
+    [join(GENERATED_DIR, 'MAP.md'), join(GENERATED_DIR, 'MAP.md')],
+    [join(GENERATED_DIR, 'PATTERNS.md'), join(GENERATED_DIR, 'PATTERNS.md')],
   ];
 
   for (const [src, dest] of filesToCopy) {
