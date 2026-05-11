@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -116,4 +116,58 @@ test('seal --advance on the last phase flips status but leaves current_phase unc
   assert.equal(result.advanced.nextRoadmapFlipped, false, 'no phase 2 to flip');
   assert.equal(result.advanced.statePhaseAdvanced, false, 'current_phase should not move past the last phase');
   assert.equal(result.advanced.toPhase, null);
+});
+
+test('seal returns activeAtSeal when ralph/team workflows are in flight (default mode)', () => {
+  const cwd = setupProject();
+  const sessionDir = join(cwd, '.omx', 'state', 'sessions', 'live-session');
+  mkdirSync(sessionDir, { recursive: true });
+  writeFileSync(
+    join(sessionDir, 'ralph-state.json'),
+    JSON.stringify({ current_phase: 'executing', session_id: 'live-session' }),
+    'utf8',
+  );
+  const teamDir = join(cwd, '.omx', 'state', 'team', 'active-team');
+  mkdirSync(teamDir, { recursive: true });
+
+  const result = seal({ cwd, phase: 1, note: 'default-active' });
+  // Default mode: surfaces active workflows but proceeds with the seal.
+  assert.ok(result.activeAtSeal, 'expected activeAtSeal populated when not ignored');
+  assert.equal(result.activeAtSeal.ralph.length, 1);
+  assert.equal(result.activeAtSeal.ralph[0].sessionId, 'live-session');
+  assert.equal(result.activeAtSeal.team.length, 1);
+  assert.equal(result.activeAtSeal.team[0].teamName, 'active-team');
+  assert.ok(existsSync(result.statePath), 'seal should still proceed in default mode');
+});
+
+test('seal --strict-active refuses when ralph or team workflows are in flight', () => {
+  const cwd = setupProject();
+  const sessionDir = join(cwd, '.omx', 'state', 'sessions', 'strict-block');
+  mkdirSync(sessionDir, { recursive: true });
+  writeFileSync(
+    join(sessionDir, 'ralph-state.json'),
+    JSON.stringify({ current_phase: 'verifying', session_id: 'strict-block' }),
+    'utf8',
+  );
+  assert.throws(
+    () => seal({ cwd, phase: 1, strictActive: true }),
+    (err: unknown) =>
+      err instanceof SealError &&
+      /Refusing to seal/i.test((err as Error).message) &&
+      /strict-block/.test((err as Error).message),
+    'expected SealError citing the active session under strict mode',
+  );
+});
+
+test('seal --ignore-active skips the workflow detector entirely', () => {
+  const cwd = setupProject();
+  const sessionDir = join(cwd, '.omx', 'state', 'sessions', 'ignored');
+  mkdirSync(sessionDir, { recursive: true });
+  writeFileSync(
+    join(sessionDir, 'ralph-state.json'),
+    JSON.stringify({ current_phase: 'executing', session_id: 'ignored' }),
+    'utf8',
+  );
+  const result = seal({ cwd, phase: 1, ignoreActive: true });
+  assert.equal(result.activeAtSeal, undefined, 'ignoreActive should suppress activeAtSeal entirely');
 });

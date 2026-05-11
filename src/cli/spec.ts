@@ -133,14 +133,30 @@ export async function specCommand(rawArgs: string[]): Promise<void> {
       const phaseStr = args.positional[0];
       const phase = phaseStr ? Number.parseInt(phaseStr, 10) : NaN;
       if (!Number.isFinite(phase) || phase < 0) {
-        console.error('error: usage — codexian spec seal <phase> [--note "..."] [--force] [--advance]');
+        console.error('error: usage — codexian spec seal <phase> [--note "..."] [--force] [--advance] [--ignore-active|--strict-active]');
         process.exit(1);
       }
       const note = args.named.get('note');
       const force = args.flags.has('--force');
       const advance = args.flags.has('--advance');
+      const ignoreActive = args.flags.has('--ignore-active');
+      const strictActive = args.flags.has('--strict-active');
       try {
-        const result = seal({ cwd, phase, note, force, advance });
+        const result = seal({ cwd, phase, note, force, advance, ignoreActive, strictActive });
+        if (result.activeAtSeal) {
+          const lines: string[] = [];
+          for (const r of result.activeAtSeal.ralph) {
+            lines.push(`  ralph session ${r.sessionId} is ${r.currentPhase}`);
+          }
+          for (const t of result.activeAtSeal.team) {
+            lines.push(`  team "${t.teamName}" has a live state directory`);
+          }
+          if (lines.length > 0) {
+            console.warn('warning: active workflows detected at seal time (pass --strict-active to refuse, --ignore-active to skip the check):');
+            for (const line of lines) console.warn(line);
+            console.warn('');
+          }
+        }
         console.log(`sealed phase ${phase}`);
         console.log(`  state:   ${result.statePath}`);
         if (result.contextPath) console.log(`  context: ${result.contextPath}`);

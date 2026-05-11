@@ -1,6 +1,12 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
+import {
+  findActiveWorkflows,
+  hasAnyActive,
+  summariseActiveWorkflows,
+  type ActiveWorkflows,
+} from './active-workflows.js';
 import { SEALED_DIR } from './contract.js';
 import { locateSpecDir } from './locate.js';
 
@@ -29,6 +35,18 @@ export interface SealOptions {
    * scripted seals that want the transition in one call.
    */
   advance?: boolean;
+  /**
+   * Skip the ralph/team active-workflow check entirely. Use when the
+   * caller has verified there is no active work or is intentionally
+   * sealing during a long-lived ralph session.
+   */
+  ignoreActive?: boolean;
+  /**
+   * Treat any active ralph/team workflow as a hard error and refuse
+   * the seal. Default behaviour collects active workflows in the
+   * result so the caller can warn but does not block.
+   */
+  strictActive?: boolean;
 }
 
 export class SealError extends Error {
@@ -51,6 +69,12 @@ export interface SealResult {
     nextRoadmapFlipped: boolean;
     statePhaseAdvanced: boolean;
   };
+  /**
+   * Active ralph/team workflows detected at seal time. Populated
+   * unless ignoreActive=true. Empty arrays when no active work was
+   * found. Strict mode throws instead of returning these.
+   */
+  activeAtSeal?: ActiveWorkflows;
 }
 
 export function seal(options: SealOptions): SealResult {
@@ -60,6 +84,18 @@ export function seal(options: SealOptions): SealResult {
     throw new Error(
       `No spec directory found in ${cwd}. Run \`codexian spec init\` first.`,
     );
+  }
+
+  // C4 interlock: detect active ralph/team workflows before snapshotting.
+  let activeAtSeal: ActiveWorkflows | undefined;
+  if (!options.ignoreActive) {
+    activeAtSeal = findActiveWorkflows(cwd);
+    if (options.strictActive && hasAnyActive(activeAtSeal)) {
+      const summary = summariseActiveWorkflows(activeAtSeal).join('; ');
+      throw new SealError(
+        `Refusing to seal phase ${options.phase} while active workflows are in flight (strict mode): ${summary}. Pass --ignore-active to override, or shut down the workflow first.`,
+      );
+    }
   }
 
   const sealedDir = join(located.dir, SEALED_DIR);
@@ -116,7 +152,14 @@ export function seal(options: SealOptions): SealResult {
     advanced = advanceWorkflow(located.dir, phase, now);
   }
 
-  return { sealedDir, statePath: stateDest, contextPath: ctxDest, ledgerPath, advanced };
+  return {
+    sealedDir,
+    statePath: stateDest,
+    contextPath: ctxDest,
+    ledgerPath,
+    advanced,
+    activeAtSeal,
+  };
 }
 
 /**
