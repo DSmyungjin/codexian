@@ -12,6 +12,11 @@ import {
   type DocKind,
   type DocType,
 } from './contract.js';
+import {
+  computeCoverage,
+  extractDecisionIds,
+  extractPlanDecisionRefs,
+} from './decisions.js';
 import { locateSpecDir } from './locate.js';
 
 export interface ValidationIssue {
@@ -92,6 +97,7 @@ export function validate(cwd: string = process.cwd()): ValidationReport {
     if (existsSync(ctxPath)) {
       const ctxText = readFileSync(ctxPath, 'utf8');
       issues.push(...checkDoc(ctxName, ctxText));
+      issues.push(...checkDecisionCoverage(located.dir, currentPhase, ctxText));
     }
     // If the CONTEXT for the current phase is missing, surface that —
     // the session-start hook will silently skip it, leaving agents
@@ -207,6 +213,52 @@ function checkKindRules(name: string, text: string, kind: DocKind): ValidationIs
     }
   }
 
+  return issues;
+}
+
+/**
+ * Decision-ID coverage gate. Enforces D-01..D-05 of phase 2 of codexian's
+ * own spec contract: every D-NN declared in CONTEXT.phase-N.md must be
+ * referenced inside the SPEC:PLAN markers for that phase in ROADMAP.md.
+ *
+ * No-ops when:
+ *  - CONTEXT has no D-IDs (nothing to gate against)
+ *  - ROADMAP has no SPEC:PLAN section for this phase (phase not planned yet)
+ *  - ROADMAP.md cannot be read (validate already errored on the missing file)
+ */
+function checkDecisionCoverage(
+  specDir: string,
+  phase: number,
+  contextText: string,
+): ValidationIssue[] {
+  const decisions = extractDecisionIds(contextText);
+  if (decisions.length === 0) return [];
+
+  const roadmapPath = join(specDir, 'ROADMAP.md');
+  if (!existsSync(roadmapPath)) return [];
+  const roadmapText = readFileSync(roadmapPath, 'utf8');
+
+  const planRefs = extractPlanDecisionRefs(roadmapText, phase);
+  if (planRefs == null) return [];
+
+  const { missing, extra } = computeCoverage(decisions, planRefs);
+  const issues: ValidationIssue[] = [];
+  const ctxName = `CONTEXT.phase-${phase}.md`;
+
+  if (missing.length > 0) {
+    issues.push({
+      file: ctxName,
+      level: 'error',
+      message: `Plan for phase ${phase} is missing references to decisions: ${missing.join(', ')}. Every D-NN in CONTEXT must be mentioned in the SPEC:PLAN markers in ROADMAP.md.`,
+    });
+  }
+  if (extra.length > 0) {
+    issues.push({
+      file: 'ROADMAP.md',
+      level: 'warning',
+      message: `Plan for phase ${phase} references decision IDs not declared in ${ctxName}: ${extra.join(', ')}. Either add them to CONTEXT or correct the plan.`,
+    });
+  }
   return issues;
 }
 
