@@ -22,6 +22,7 @@ Usage:
 
 Options for init:
   --force        Overwrite existing spec files (default: skip).
+  --no-agents    Skip merging the SPEC:CONTRACT block into project AGENTS.md.
   --cwd <dir>    Operate against <dir> instead of process.cwd().
 `;
 
@@ -68,7 +69,11 @@ export async function specCommand(rawArgs: string[]): Promise<void> {
 
   switch (sub) {
     case 'init': {
-      const result = init({ cwd, force: args.flags.has('--force') });
+      const result = init({
+        cwd,
+        force: args.flags.has('--force'),
+        noAgents: args.flags.has('--no-agents'),
+      });
       console.log(`spec dir: ${result.specDir}`);
       if (result.created.length) {
         console.log(`created: ${result.created.length}`);
@@ -78,11 +83,22 @@ export async function specCommand(rawArgs: string[]): Promise<void> {
         console.log(`skipped (already exists, use --force to overwrite):`);
         for (const name of result.skipped) console.log(`  · ${name}`);
       }
+      if (result.agents) {
+        const a = result.agents;
+        const verb = {
+          created: 'created',
+          replaced: 'refreshed SPEC:CONTRACT block in',
+          appended: 'appended SPEC:CONTRACT block to',
+          unchanged: 'no changes needed for',
+        }[a.action];
+        console.log(`AGENTS.md: ${verb} ${a.path}`);
+      }
       console.log(`\nHook script: ${result.hookPath}`);
       console.log(
-        `\nNext: register the hook with Codex by adding it to .codex/hooks.json\n` +
-          `as a session-start entry pointing at the script above. Then edit\n` +
-          `${SPEC_DIR}/PROJECT.md and run \`codexian spec validate\`.`,
+        `\nNext: edit ${SPEC_DIR}/PROJECT.md and run \`codexian spec validate\`.\n` +
+          `Codex auto-loads AGENTS.md so the SPEC:CONTRACT directive is\n` +
+          `already wired. (The hook script is opportunistic — used when\n` +
+          `Codex's SessionStart hook regression is resolved upstream.)`,
       );
       return;
     }

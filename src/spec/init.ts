@@ -9,12 +9,15 @@ import {
   REQUIRED_DOCS,
   SPEC_DIR,
 } from './contract.js';
+import { mergeAgentsHeritage, type AgentsMergeAction } from './agents-merge.js';
 
 export interface InitOptions {
   /** Project root. Defaults to process.cwd(). */
   cwd?: string;
   /** Overwrite existing spec files. Default: false. */
   force?: boolean;
+  /** Skip merging the SPEC:CONTRACT block into project AGENTS.md. */
+  noAgents?: boolean;
 }
 
 export interface InitResult {
@@ -22,6 +25,7 @@ export interface InitResult {
   hookPath: string;
   created: string[];
   skipped: string[];
+  agents?: { path: string; action: AgentsMergeAction };
 }
 
 function templatesRoot(): string {
@@ -68,7 +72,19 @@ export function init(options: InitOptions = {}): InitResult {
 
   ensureGitignoreEntry(cwd);
 
-  return { specDir, hookPath, created, skipped };
+  let agents: { path: string; action: AgentsMergeAction } | undefined;
+  if (!options.noAgents) {
+    try {
+      agents = mergeAgentsHeritage(cwd);
+    } catch (err) {
+      // If template is missing or unreadable, surface but do not fail init.
+      const msg = err instanceof Error ? err.message : String(err);
+      agents = { path: join(cwd, 'AGENTS.md'), action: 'unchanged' };
+      console.warn(`warning: AGENTS.md heritage merge skipped — ${msg}`);
+    }
+  }
+
+  return { specDir, hookPath, created, skipped, agents };
 }
 
 function ensureGitignoreEntry(cwd: string): void {
