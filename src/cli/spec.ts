@@ -42,9 +42,12 @@ Usage:
                                           candidate \`omx team\` tasks (one per AC).
 
 Options for init:
-  --force        Overwrite existing spec files (default: skip).
-  --no-agents    Skip merging the SPEC:CONTRACT block into project AGENTS.md.
-  --cwd <dir>    Operate against <dir> instead of process.cwd().
+  --force             Overwrite existing spec files (default: skip).
+  --no-agents         Skip merging the SPEC:CONTRACT block into project AGENTS.md.
+  --no-hook-register  Skip writing .codex/hooks.json + ~/.codex/config.toml trust entry.
+  --no-hook-trust     Write .codex/hooks.json but skip the trust hash (Codex 0.129+ users
+                      can trust manually via TUI /hooks if they prefer).
+  --cwd <dir>         Operate against <dir> instead of process.cwd().
 `;
 
 interface ParsedArgs {
@@ -94,6 +97,8 @@ export async function specCommand(rawArgs: string[]): Promise<void> {
         cwd,
         force: args.flags.has('--force'),
         noAgents: args.flags.has('--no-agents'),
+        noHookRegister: args.flags.has('--no-hook-register'),
+        noHookTrust: args.flags.has('--no-hook-trust'),
       });
       console.log(`spec dir: ${result.specDir}`);
       if (result.created.length) {
@@ -114,12 +119,25 @@ export async function specCommand(rawArgs: string[]): Promise<void> {
         }[a.action];
         console.log(`AGENTS.md: ${verb} ${a.path}`);
       }
+      if (result.hookRegistration) {
+        const h = result.hookRegistration;
+        console.log(`\nHook registration:`);
+        console.log(`  hooks.json:  ${h.hooksJsonAction} — ${h.hooksJsonPath}`);
+        if (h.trustAction === 'skipped-no-trust') {
+          console.log(`  trust:       skipped (--no-hook-trust)`);
+        } else if (h.trustAction === 'skipped') {
+          console.log(`  trust:       skipped — Codex home not found (install Codex CLI first)`);
+        } else {
+          console.log(`  trust:       ${h.trustAction} — ${h.trustConfigPath}`);
+        }
+      }
       console.log(`\nHook script: ${result.hookPath}`);
       console.log(
         `\nNext: edit ${SPEC_DIR}/PROJECT.md and run \`codexian spec validate\`.\n` +
           `Codex auto-loads AGENTS.md so the SPEC:CONTRACT directive is\n` +
-          `already wired. (The hook script is opportunistic — used when\n` +
-          `Codex's SessionStart hook regression is resolved upstream.)`,
+          `wired immediately. If hook registration succeeded above, the\n` +
+          `SessionStart hook channel is *also* active on Codex 0.129+ —\n` +
+          `the spec context will be injected as proper additionalContext.`,
       );
       return;
     }

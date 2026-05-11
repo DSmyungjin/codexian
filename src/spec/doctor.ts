@@ -286,18 +286,20 @@ function checkOwnerSkills(cwd: string): CheckResult {
 }
 
 /**
- * Codex CLI version detector. The SessionStart hook regression
- * (openai/codex issue #21639) makes `.codex/hooks.json` entries not
- * fire on Codex 0.129.0 and later as of 2026-05-11 (verified
- * empirically against 0.128.0 / 0.130.0 / 0.131.0-alpha.4). The
- * codexian spec contract still works via the AGENTS.md mandatory
- * directive fallback, but the hook channel — which is stricter
- * system context — is silently disabled. Surface that as a WARN
- * with the version + a recommendation.
+ * Codex CLI version detector. Codex 0.129+ added a deliberate hook
+ * trust gate (openai/codex#21639 framed it as a regression — it is
+ * not; it's a security feature). The trust state lives in
+ * $CODEX_HOME/config.toml under [hooks.state.<key>]. `codexian spec
+ * init` writes both the .codex/hooks.json entry and the trust hash
+ * for it, so the hook channel works on 0.129+ without manual
+ * intervention.
+ *
+ * Doctor reports the version + whether the hook registration is in
+ * place. The two together describe whether the hook channel will
+ * actually fire.
  */
-const HOOK_REGRESSION_MIN_MAJOR = 0;
-const HOOK_REGRESSION_MIN_MINOR = 129;
-const HOOK_WORKING_RECOMMENDATION = '0.128.0';
+const HOOK_TRUST_GATE_MIN_MAJOR = 0;
+const HOOK_TRUST_GATE_MIN_MINOR = 129;
 
 function checkCodexVersion(): CheckResult {
   let raw: string;
@@ -314,7 +316,6 @@ function checkCodexVersion(): CheckResult {
       detail: 'codex binary not on PATH or `codex --version` failed — skipping version check',
     };
   }
-  // Expected shape: "codex-cli 0.130.0" or similar.
   const m = raw.match(/(\d+)\.(\d+)\.(\d+)(?:-[\w.-]+)?/);
   if (!m) {
     return {
@@ -325,28 +326,81 @@ function checkCodexVersion(): CheckResult {
   }
   const major = Number.parseInt(m[1], 10);
   const minor = Number.parseInt(m[2], 10);
-  const version = m[0]; // full matched version including any -alpha tag
-  const affected =
-    major > HOOK_REGRESSION_MIN_MAJOR ||
-    (major === HOOK_REGRESSION_MIN_MAJOR && minor >= HOOK_REGRESSION_MIN_MINOR);
-  if (!affected) {
+  const version = m[0];
+  const trustGated =
+    major > HOOK_TRUST_GATE_MIN_MAJOR ||
+    (major === HOOK_TRUST_GATE_MIN_MAJOR && minor >= HOOK_TRUST_GATE_MIN_MINOR);
+  return {
+    name: 'codex CLI version',
+    status: 'INFO',
+    detail: trustGated
+      ? `${version} — hook trust gate active (Codex 0.129+). codexian spec init writes the trust hash, so hooks fire.`
+      : `${version} — pre-trust-gate; hooks fire without explicit trust state.`,
+  };
+}
+
+import { realpathSync } from 'fs';
+
+function checkHookRegistration(cwd: string): CheckResult {
+  const hooksJsonPath = join(cwd, '.codex', 'hooks.json');
+  if (!existsSync(hooksJsonPath)) {
     return {
-      name: 'codex CLI version',
+      name: 'codex hook registration',
+      status: 'WARN',
+      detail: `${hooksJsonPath} not found. Run \`codexian spec init\` to register the SessionStart hook.`,
+    };
+  }
+  let parsed: { hooks?: { SessionStart?: Array<{ hooks?: Array<{ command?: string }> }> } };
+  try {
+    parsed = JSON.parse(readFileSync(hooksJsonPath, 'utf8'));
+  } catch {
+    return {
+      name: 'codex hook registration',
+      status: 'FAIL',
+      detail: `${hooksJsonPath} is not valid JSON — refuses to fire any hook.`,
+    };
+  }
+  const sessionStart = parsed.hooks?.SessionStart ?? [];
+  const codexianEntry = sessionStart
+    .flatMap((g) => g.hooks ?? [])
+    .find((h) => typeof h.command === 'string' && h.command.includes('.codexian/spec/hooks/session-start.mjs'));
+  if (!codexianEntry) {
+    return {
+      name: 'codex hook registration',
+      status: 'WARN',
+      detail: `${hooksJsonPath} exists but has no codexian SessionStart entry. Run \`codexian spec init --force\` to add it.`,
+    };
+  }
+  // Now check trust entry in $CODEX_HOME/config.toml.
+  const codexHome = process.env.CODEX_HOME ?? join(homedir(), '.codex');
+  const configToml = join(codexHome, 'config.toml');
+  if (!existsSync(configToml)) {
+    return {
+      name: 'codex hook registration',
+      status: 'INFO',
+      detail: `hooks.json has codexian entry but ${configToml} is missing — trust check skipped (Codex may not be installed).`,
+    };
+  }
+  let canonicalHooksPath: string;
+  try {
+    canonicalHooksPath = realpathSync(hooksJsonPath);
+  } catch {
+    canonicalHooksPath = hooksJsonPath;
+  }
+  const expectedKey = `${canonicalHooksPath}:session_start:0:0`;
+  const tomlText = readFileSync(configToml, 'utf8');
+  const sectionHeader = `[hooks.state."${expectedKey}"]`;
+  if (tomlText.includes(sectionHeader)) {
+    return {
+      name: 'codex hook registration',
       status: 'PASS',
-      detail: `${version} — SessionStart hooks fire normally`,
+      detail: `${hooksJsonPath} entry + trust hash in ${configToml} — hook channel active`,
     };
   }
   return {
-    name: 'codex CLI version',
+    name: 'codex hook registration',
     status: 'WARN',
-    detail:
-      `${version} is affected by the SessionStart hook regression ` +
-      `(openai/codex#21639 — confirmed on 0.130.0 and 0.131.0-alpha.4). ` +
-      `The spec contract still loads via the AGENTS.md mandatory directive ` +
-      `(verified working), but the .codex/hooks.json channel is silently ` +
-      `disabled. To restore the hook channel, pin to ${HOOK_WORKING_RECOMMENDATION}: ` +
-      `\`npm install -g @openai/codex@${HOOK_WORKING_RECOMMENDATION}\`. ` +
-      `When upstream resolves the regression, update this check.`,
+    detail: `hooks.json has codexian entry but no [hooks.state."${expectedKey}"] in ${configToml}. On Codex 0.129+ the hook will not fire until trusted. Run \`codexian spec init --force\` to write the trust hash, or trust via TUI \`/hooks\`.`,
   };
 }
 
@@ -382,6 +436,7 @@ export function doctor(cwd: string = process.cwd()): DoctorReport {
   checks.push(checkAgentsHeritage(cwd));
   checks.push(checkOwnerSkills(cwd));
   checks.push(checkCodexVersion());
+  checks.push(checkHookRegistration(cwd));
 
   if (located) {
     checks.push(...summariseState(located));

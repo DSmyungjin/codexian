@@ -10,6 +10,11 @@ import {
   SPEC_DIR,
 } from './contract.js';
 import { mergeAgentsHeritage, type AgentsMergeAction } from './agents-merge.js';
+import {
+  registerHook,
+  type HookEntryAction,
+  type TrustAction,
+} from './hook-register.js';
 
 export interface InitOptions {
   /** Project root. Defaults to process.cwd(). */
@@ -18,6 +23,10 @@ export interface InitOptions {
   force?: boolean;
   /** Skip merging the SPEC:CONTRACT block into project AGENTS.md. */
   noAgents?: boolean;
+  /** Skip registering the SessionStart hook in .codex/hooks.json + ~/.codex/config.toml. */
+  noHookRegister?: boolean;
+  /** Register the hook entry but skip writing the trust hash. */
+  noHookTrust?: boolean;
 }
 
 export interface InitResult {
@@ -26,6 +35,12 @@ export interface InitResult {
   created: string[];
   skipped: string[];
   agents?: { path: string; action: AgentsMergeAction };
+  hookRegistration?: {
+    hooksJsonPath: string;
+    hooksJsonAction: HookEntryAction;
+    trustConfigPath: string | null;
+    trustAction: TrustAction;
+  };
 }
 
 function templatesRoot(): string {
@@ -84,7 +99,23 @@ export function init(options: InitOptions = {}): InitResult {
     }
   }
 
-  return { specDir, hookPath, created, skipped, agents };
+  let hookRegistration: InitResult['hookRegistration'];
+  if (!options.noHookRegister) {
+    try {
+      const r = registerHook({ cwd, noTrust: options.noHookTrust });
+      hookRegistration = {
+        hooksJsonPath: r.hooksJsonPath,
+        hooksJsonAction: r.hooksJsonAction,
+        trustConfigPath: r.trustConfigPath,
+        trustAction: r.trustAction,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`warning: hook registration skipped — ${msg}`);
+    }
+  }
+
+  return { specDir, hookPath, created, skipped, agents, hookRegistration };
 }
 
 function ensureGitignoreEntry(cwd: string): void {

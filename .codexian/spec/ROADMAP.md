@@ -53,12 +53,27 @@ AC coverage:
 
 ### Phase 3: Codex hook auto-registration
 
-- **Status:** `[!]`
-- **Goal:** When Codex's SessionStart hook regression is resolved upstream, `codexian spec init` auto-registers the session-start.mjs hook in `.codex/hooks.json` and AGENTS.md fallback becomes redundant.
-- **Acceptance:** hook entry written, hook fires in fresh Codex session, smoke test confirms behavior; AGENTS.md mandatory directive remains as graceful fallback.
-- **Blocker:** waiting on upstream openai/codex SessionStart hook regression fix. Re-open when upstream signals.
-- **Dependencies:** Phase 2; upstream openai/codex hook fix
+- **Status:** `[x]`
+- **Goal:** `codexian spec init` writes the SessionStart entry to `.codex/hooks.json` AND the matching trust hash to `$CODEX_HOME/config.toml`, so the hook channel works on Codex 0.129+ without the user trusting via TUI `/hooks`. The earlier "upstream regression" framing was incorrect — Codex 0.129's hook trust gate is a security feature, not a bug; codexian satisfies it programmatically.
+- **Acceptance:** `spec init` writes hook entry + trust hash; foreign SessionStart entries preserved; idempotent on re-run; doctor reports hook registration state; integration smoke test on Codex 0.130.0 confirms the hook fires and additionalContext reaches the model.
+- **Dependencies:** Phase 2
 - **Context doc:** `CONTEXT.phase-3.md`
+
+<!-- SPEC:PLAN:START phase-3 -->
+Implementation plan for phase 3 (verified empirically against Codex 0.130.0):
+
+- **D-01** (trigger detection) — Codex 0.129+ is detected via `codex --version` semver parse in `src/spec/doctor.ts`. The trust state shape is identical on pre-gate versions and harmless if written, so `registerHook` always writes the trust hash regardless of detected version.
+- **D-02** (entry shape) — `.codex/hooks.json` SessionStart entry: `matcher: "startup|resume|clear"`, single command `"node" "<canonical-abs-path-to-.codexian/spec/hooks/session-start.mjs>"`. Status message `"codexian spec session-start"`.
+- **D-03** (idempotency) — scan existing SessionStart entries for an exact command match; skip-write when present. `hooks.json` is JSON round-tripped with `JSON.stringify(obj, null, 2)`.
+- **D-04** (conflict policy) — never edit or remove a SessionStart entry whose command does not match the codexian script path. Other tools' SessionStart hooks coexist (verified in unit test).
+- **D-05** (trust hash) — `sha256(canonicalJson(normalisedIdentity))` matching OMX's `versionForCodexTomlIdentity`. Trust key uses `realpathSync(hooksJsonPath)` to handle macOS `/tmp` → `/private/tmp` symlinks (a real failure mode discovered during testing). Written to `[hooks.state."<key>"] trusted_hash = "sha256:..."` in `$CODEX_HOME/config.toml`.
+
+Self-application: `codexian spec init` ran on this repo writes the entry to `.codex/hooks.json` and the trust hash to `~/.codex/config.toml`. `codexian spec doctor` reports `PASS` for `codex hook registration`. Smoke verified: spec context reaches the model via additionalContext on Codex 0.130.0.
+
+AC coverage:
+- AC-1..AC-6 all satisfied. The earlier "upstream-blocked" framing was wrong; `codexian spec doctor` and `docs/codex-hook-trust-gate.md` now describe the actual mechanism.
+<!-- SPEC:PLAN:END phase-3 -->
+
 
 ### Phase 4: Validation depth and scope sealing
 

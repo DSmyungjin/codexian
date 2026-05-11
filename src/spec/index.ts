@@ -26,3 +26,12 @@ export {
   type TeamTasksOptions,
   type FormatOptions,
 } from './team-tasks.js';
+export {
+  registerHook,
+  computeTrustHash,
+  HookRegisterError,
+  type HookRegisterOptions,
+  type HookRegisterResult,
+  type HookEntryAction,
+  type TrustAction,
+} from './hook-register.js';

@@ -29,8 +29,8 @@ current_phase: 4
 
 ## Last seal
 
-last_sealed_phase: 3
-last_sealed_at: 2026-05-11T10:50:19.294Z
+last_sealed_phase: 2
+last_sealed_at: 2026-05-11T08:22:18.923Z
 
 ## Active work
 
