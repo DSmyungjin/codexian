@@ -319,6 +319,7 @@ If this happens, try:
 
 ## Documentation
 
+- [Spec Contract](./docs/spec-contract.md) — codexian's documentation-first discipline (`.codexian/spec/`)
 - [Getting Started](./docs/getting-started.html)
 - [Demo guide](./DEMO.md)
 - [Wiki feature](./docs/wiki-feature.md)
