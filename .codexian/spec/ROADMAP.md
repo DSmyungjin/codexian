@@ -28,8 +28,8 @@
 ### Phase 2: Self-application and verification harness
 
 - **Status:** `[~]`
-- **Goal:** codexian itself uses its own spec contract. Add unit tests for src/spec/. Verify LLM behavior in real Codex sessions.
-- **Acceptance:** `.codexian/spec/` is committed and validates clean; src/spec/__tests__/ covers init, validate, seal, doctor, agents-merge with positive + negative cases; at least one real Codex session captured demonstrating SPEC:CONTRACT directive compliance.
+- **Goal:** codexian itself uses its own spec contract. Add unit tests for src/spec/. Verify LLM behavior in real Codex sessions. Introduce Decision ID + coverage gate (D-01..D-05 in CONTEXT.phase-2.md) so plans must reference every CONTEXT decision.
+- **Acceptance:** `.codexian/spec/` is committed and validates clean; src/spec/__tests__/ covers init, validate, seal, doctor, agents-merge with positive + negative cases; at least one real Codex session captured demonstrating SPEC:CONTRACT directive compliance; Decision ID + coverage gate implemented in src/spec/decisions.ts and wired into validate.ts; coverage tests under src/spec/__tests__/{decisions,validate}.test.ts pass.
 - **Dependencies:** Phase 1
 - **Context doc:** `CONTEXT.phase-2.md`
 

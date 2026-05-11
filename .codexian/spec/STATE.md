@@ -36,10 +36,11 @@ last_sealed_at: 2026-05-11T06:27:43.644Z
 
 <!-- What is being worked on right now. Updated by executors. -->
 
-- Verifying spec-state-update skill via codex exec
+- Implementing Decision ID + plan coverage gate in src/spec/decisions.ts and src/spec/validate.ts (AC-6/AC-7)
 
 ## Recent decisions
 
+- 2026-05-11T08:15:34Z — Adopted `D-NN` decision ID format and added plan-coverage gate to `codexian spec validate`. See CONTEXT.phase-2.md D-01..D-05.
 - 2026-05-11T06:27:43.644Z — Sealed phase 1 and advanced to phase 2.
 
 <!-- Append-only log of decisions that affect future work. Most recent at top. -->
