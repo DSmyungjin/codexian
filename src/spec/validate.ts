@@ -65,13 +65,42 @@ export function validate(cwd: string = process.cwd()): ValidationReport {
   }
 
   const state = join(located.dir, 'STATE.md');
+  let currentPhase: number | null = null;
   if (existsSync(state)) {
     const text = readFileSync(state, 'utf8');
-    if (!/^\s*current_phase:\s*\d+\s*$/m.test(text)) {
+    const m = text.match(/^\s*current_phase:\s*(\d+)\s*$/m);
+    if (!m) {
       issues.push({
         file: 'STATE.md',
         level: 'error',
         message: 'STATE.md is missing a "current_phase: <N>" line. The session-start hook needs this to load the right CONTEXT.',
+      });
+    } else {
+      currentPhase = Number.parseInt(m[1], 10);
+    }
+  }
+
+  // Strict check: the CONTEXT file for the current phase, if present,
+  // must satisfy the DECISIONS kind rules. This catches the case where
+  // a fresh new-phase scaffolds a CONTEXT.phase-N.md full of _TODO_
+  // placeholders and the user advances to it without running
+  // $spec-discuss — previously validate would still report OK and the
+  // executor would happily proceed with empty decisions.
+  if (currentPhase != null && currentPhase > 0) {
+    const ctxName = `CONTEXT.phase-${currentPhase}.md`;
+    const ctxPath = join(located.dir, ctxName);
+    if (existsSync(ctxPath)) {
+      const ctxText = readFileSync(ctxPath, 'utf8');
+      issues.push(...checkDoc(ctxName, ctxText));
+    }
+    // If the CONTEXT for the current phase is missing, surface that —
+    // the session-start hook will silently skip it, leaving agents
+    // without phase decisions.
+    else {
+      issues.push({
+        file: ctxName,
+        level: 'warning',
+        message: `Current phase is ${currentPhase} but ${ctxName} does not exist. Run \`codexian spec new-phase ${currentPhase} "<name>"\` to scaffold it.`,
       });
     }
   }
