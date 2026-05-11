@@ -1,9 +1,19 @@
-import { init, validate, seal, writeContextDoc, locateSpecDir, SPEC_DIR } from '../spec/index.js';
+import {
+  doctor,
+  formatReport,
+  init,
+  locateSpecDir,
+  seal,
+  SPEC_DIR,
+  validate,
+  writeContextDoc,
+} from '../spec/index.js';
 
 const USAGE = `codexian spec — documentation contract
 
 Usage:
   codexian spec init                       Scaffold .codexian/spec/ from templates.
+  codexian spec doctor                     Check installation integrity (files, hook, AGENTS.md, skills).
   codexian spec validate                   Lint the spec docs and report issues.
   codexian spec seal <phase> [--note ...]  Snapshot STATE + CONTEXT for a phase into sealed/.
   codexian spec new-phase <N> <name>       Create CONTEXT.phase-N.md from the template.
@@ -150,6 +160,12 @@ export async function specCommand(rawArgs: string[]): Promise<void> {
     case 'where': {
       const located = locateSpecDir(cwd);
       console.log(located ? located.dir : 'none');
+      return;
+    }
+    case 'doctor': {
+      const report = doctor(cwd);
+      console.log(formatReport(report));
+      if (report.fails > 0) process.exit(1);
       return;
     }
     default:
