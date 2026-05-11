@@ -1,15 +1,18 @@
 #!/usr/bin/env node
 // codexian spec-contract session-start hook.
 //
-// Loads .codexian/spec/{PROJECT,REQUIREMENTS,ROADMAP,STATE}.md plus the
-// CONTEXT file for the current phase (derived from STATE.md) and emits a
-// single concatenated context block on stdout. The Codex hook runner
-// captures stdout and injects it into the session prompt.
+// Codex's native hook protocol expects a JSON envelope on stdout:
+//   { "hookSpecificOutput": { "hookEventName": "SessionStart",
+//                             "additionalContext": "<text>" } }
+// Text in `additionalContext` is injected as implicit context for
+// the session before the user's first turn.
 //
-// Idempotent and dependency-free: stdlib only. Silent when .codexian/spec/
-// does not exist so a non-spec project is unaffected.
+// This hook concatenates .codexian/spec/{PROJECT,REQUIREMENTS,
+// ROADMAP,STATE}.md plus the CONTEXT for the current phase
+// (derived from STATE.md's `current_phase: N` line) and emits the
+// envelope. Stdlib-only and silent when no spec dir exists.
 
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, writeSync } from "node:fs";
 import path from "node:path";
 
 const SPEC_DIR_CANDIDATES = [".codexian/spec", ".omx/spec", ".spec"];
@@ -36,9 +39,9 @@ function loadFile(dir, name) {
   return readFileSync(full, "utf8");
 }
 
-function main() {
+function buildContext() {
   const dir = findSpecDir(cwd);
-  if (!dir) return;
+  if (!dir) return "";
 
   const blocks = [];
   for (const name of ALWAYS_LOAD) {
@@ -56,19 +59,32 @@ function main() {
     }
   }
 
-  if (blocks.length === 0) return;
+  if (blocks.length === 0) return "";
 
-  process.stdout.write(
-    [
-      "<!-- codexian spec-contract: injected at session start -->",
-      "<!-- These documents are the source of truth for project intent and position. -->",
-      "",
-      ...blocks.join("\n\n---\n\n").split("\n"),
-      "",
-      "<!-- end codexian spec-contract -->",
-      "",
-    ].join("\n"),
-  );
+  return [
+    "<!-- codexian spec-contract: injected at session start -->",
+    "<!-- Source of truth for project intent and position. -->",
+    "",
+    blocks.join("\n\n---\n\n"),
+    "",
+    "<!-- end codexian spec-contract -->",
+  ].join("\n");
 }
 
-main();
+const additionalContext = buildContext();
+if (additionalContext) {
+  const envelope = {
+    hookSpecificOutput: {
+      hookEventName: "SessionStart",
+      additionalContext,
+    },
+  };
+  const buf = Buffer.from(JSON.stringify(envelope));
+  // Synchronous write directly to fd 1 — never deadlocks on stream backpressure.
+  let offset = 0;
+  while (offset < buf.length) {
+    offset += writeSync(1, buf, offset, buf.length - offset);
+  }
+}
+// Hard exit so we never wait on stdin.
+process.exit(0);
