@@ -1,7 +1,21 @@
 <!-- SPEC:DOC:PROJECT -->
+<!-- spec:kind: INTENT -->
+<!-- spec:author: human -->
+<!-- spec:mutability: mutable -->
+<!-- spec:load: always -->
+<!-- spec:forcing: yes -->
 <!-- schema_version: 1 -->
 
 # PROJECT
+
+> **For agents reading this file:**
+> This is the INTENT doc. Author: human. Forcing function: yes.
+> You MAY suggest edits to the human, but you MUST NOT silently rewrite
+> Vision, Non-goals, or Primary user without explicit user direction.
+> Empty `_TODO_` placeholders here mean the project is not yet
+> "spec-complete" — surface this to the user rather than fabricating
+> content. This doc is loaded into every session; keep edits under
+> ~80 lines.
 
 > The single source of truth for *what this project is and is not*.
 > Read first at every session start. Update when vision shifts, not when code changes.

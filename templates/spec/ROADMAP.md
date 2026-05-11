@@ -1,7 +1,24 @@
 <!-- SPEC:DOC:ROADMAP -->
+<!-- spec:kind: ROADMAP -->
+<!-- spec:author: interview -->
+<!-- spec:mutability: mutable -->
+<!-- spec:load: always -->
+<!-- spec:forcing: yes -->
 <!-- schema_version: 1 -->
 
 # ROADMAP
+
+> **For agents reading this file:**
+> This is the ROADMAP doc. Owner skill: `$spec-roadmap`. Mutability:
+> mutable at phase boundaries only. You MAY flip a phase status from
+> `[ ]` → `[~]` → `[x]` via the appropriate workflow (start work →
+> `$spec-seal` on completion). You MUST NOT reorder existing phases or
+> insert new ones during normal coding work — that is a roadmap
+> decision and goes through `$spec-roadmap` or the human.
+> `SPEC:PLAN:START phase-N` / `SPEC:PLAN:END phase-N` markers inside
+> a phase entry are owned by `$spec-plan`; do not edit between them
+> by hand.
+> Always-loaded; keep under ~200 lines.
 
 > Ordered list of phases. Each phase is a coherent slice of work that lands as one or more atomic commits.
 > Update when phases are added, reordered, or completed.

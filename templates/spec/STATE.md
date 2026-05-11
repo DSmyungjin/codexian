@@ -1,7 +1,24 @@
 <!-- SPEC:DOC:STATE -->
+<!-- spec:kind: POSITION -->
+<!-- spec:author: executor -->
+<!-- spec:mutability: mutable -->
+<!-- spec:load: always -->
+<!-- spec:forcing: no -->
 <!-- schema_version: 1 -->
 
 # STATE
+
+> **For agents reading this file:**
+> This is the POSITION doc. Author: executor. This is the **only**
+> spec file you may freely edit during normal coding work. The owner
+> skill is `$spec-state-update` but for routine append-to-Active-work
+> or append-to-Recent-decisions you may edit directly.
+> You MUST NOT modify the `last_sealed_phase` or `last_sealed_at`
+> fields — those are owned by `codexian spec seal`. You MUST NOT
+> change the format of the `current_phase: N` line; the session-start
+> hook parses it. Increment `current_phase` only as part of a seal
+> transition.
+> Always-loaded; keep under ~120 lines.
 
 > Current position and recent decisions. The *only* file that changes frequently during normal work.
 > Workers and humans read this to know "where are we right now."
