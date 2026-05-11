@@ -109,6 +109,8 @@ export function validate(cwd: string = process.cwd()): ValidationReport {
         message: `Current phase is ${currentPhase} but ${ctxName} does not exist. Run \`codexian spec new-phase ${currentPhase} "<name>"\` to scaffold it.`,
       });
     }
+
+    issues.push(...checkPlanCheckMarker(located.dir, currentPhase));
   }
 
   const errors = issues.filter((i) => i.level === 'error');
@@ -262,6 +264,67 @@ function checkDecisionCoverage(
     });
   }
   return issues;
+}
+
+/**
+ * Plan-checker marker WARN (phase 4 chunk 3, D-14).
+ *
+ * When `plans/phase-N.PLAN.md` exists for the current phase and lacks
+ * the `<!-- spec:plan-check: approved -->` marker, surface an advisory
+ * warning. The hard rejection lives in the $spec-plan skill prompt;
+ * validate's job is to flag a missing marker so the next agent sees it.
+ *
+ * Sealed phases (ROADMAP status `[x]`) are exempt — those plans predate
+ * the gate and rewriting them would mutate immutable history.
+ */
+function checkPlanCheckMarker(
+  specDir: string,
+  phase: number,
+): ValidationIssue[] {
+  const planRel = `plans/phase-${phase}.PLAN.md`;
+  const planPath = join(specDir, planRel);
+  if (!existsSync(planPath)) return [];
+
+  // Sealed-phase exemption.
+  const roadmapPath = join(specDir, 'ROADMAP.md');
+  if (existsSync(roadmapPath)) {
+    const roadmap = readFileSync(roadmapPath, 'utf8');
+    if (isPhaseSealed(roadmap, phase)) return [];
+  }
+
+  const planText = readFileSync(planPath, 'utf8');
+  if (/<!--\s*spec:plan-check:\s*approved\s*-->/.test(planText)) return [];
+
+  return [
+    {
+      file: planRel,
+      level: 'warning',
+      message: `Plan for phase ${phase} is missing the architect approval marker. After $spec-plan ${phase} produces an approved plan, the marker block (\`<!-- spec:plan-check: approved -->\`) should sit at the top of the file. Re-run $spec-plan ${phase} or add the marker manually if the plan was authored before the gate landed.`,
+    },
+  ];
+}
+
+/**
+ * Detect whether ROADMAP.md marks `phase` with status `[x]`.
+ * Robust to multiple phases — only the entry whose `### Phase N:` header
+ * matches counts.
+ */
+function isPhaseSealed(roadmapText: string, phase: number): boolean {
+  const lines = roadmapText.split('\n');
+  const headerRe = new RegExp(`^###\\s+Phase\\s+${phase}\\b`);
+  let inPhase = false;
+  for (const line of lines) {
+    if (headerRe.test(line)) {
+      inPhase = true;
+      continue;
+    }
+    if (inPhase) {
+      if (/^###\s+/.test(line)) return false; // next phase reached without a Status flip
+      const m = line.match(/^-\s+\*\*Status:\*\*\s+`(\[.\])`/);
+      if (m) return m[1] === '[x]';
+    }
+  }
+  return false;
 }
 
 function parseKindMarker(text: string): DocKind | null {

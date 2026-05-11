@@ -263,6 +263,105 @@ test('validate errors on plan file with missing D-ID even when ROADMAP marker bo
   );
 });
 
+function roadmapWithStatus(phase: number, status: string, planBody = ''): string {
+  return `<!-- SPEC:DOC:ROADMAP -->
+<!-- spec:kind: ROADMAP -->
+<!-- schema_version: 1 -->
+# ROADMAP
+## Phases
+### Phase ${phase}: fixture phase
+
+- **Status:** \`${status}\`
+- **Goal:** fixture
+
+<!-- SPEC:PLAN:START phase-${phase} -->
+${planBody}
+<!-- SPEC:PLAN:END phase-${phase} -->
+`;
+}
+
+function writePlanFileWithMarker(
+  cwd: string,
+  phase: number,
+  body: string,
+  approved: boolean,
+): void {
+  const planDir = join(cwd, '.codexian', 'spec', 'plans');
+  mkdirSync(planDir, { recursive: true });
+  const markerBlock = approved
+    ? `<!-- spec:plan-check: approved -->\n<!-- spec:plan-check-reviewer: architect -->\n<!-- spec:plan-check-at: 2026-05-11T00:00:00Z -->\n\n`
+    : '';
+  writeFileSync(
+    join(planDir, `phase-${phase}.PLAN.md`),
+    `${markerBlock}<!-- SPEC:DOC:PLAN -->\n<!-- spec:kind: PLAN -->\n<!-- schema_version: 1 -->\n# PLAN — Phase ${phase}\n\n${body}`,
+    'utf8',
+  );
+}
+
+test('validate WARNs when current-phase plan file lacks plan-check marker', () => {
+  const cwd = makeTmpProject();
+  writeRequired(cwd, {
+    'PROJECT.md': MIN_PROJECT,
+    'REQUIREMENTS.md': MIN_REQUIREMENTS,
+    'ROADMAP.md': roadmapWithStatus(1, '[~]', 'See plans/phase-1.PLAN.md.'),
+    'STATE.md': STATE_PHASE_1,
+    'CONTEXT.phase-1.md': contextWithDecisions('- **D-01** — covered.\n'),
+  });
+  writePlanFileWithMarker(cwd, 1, 'Plan body cites D-01.', false);
+
+  const report = validate(cwd);
+  const warnings = report.issues.filter((i) => i.level === 'warning');
+  const planCheckWarn = warnings.find((i) =>
+    i.message.includes('missing the architect approval marker'),
+  );
+  assert.ok(
+    planCheckWarn,
+    `expected plan-check warning, got: ${JSON.stringify(warnings, null, 2)}`,
+  );
+  assert.equal(planCheckWarn!.file, 'plans/phase-1.PLAN.md');
+});
+
+test('validate stays silent when plan file carries the approved marker', () => {
+  const cwd = makeTmpProject();
+  writeRequired(cwd, {
+    'PROJECT.md': MIN_PROJECT,
+    'REQUIREMENTS.md': MIN_REQUIREMENTS,
+    'ROADMAP.md': roadmapWithStatus(1, '[~]', 'See plans/phase-1.PLAN.md.'),
+    'STATE.md': STATE_PHASE_1,
+    'CONTEXT.phase-1.md': contextWithDecisions('- **D-01** — covered.\n'),
+  });
+  writePlanFileWithMarker(cwd, 1, 'Plan body cites D-01.', true);
+
+  const report = validate(cwd);
+  const planCheckIssues = report.issues.filter((i) =>
+    i.message.includes('missing the architect approval marker'),
+  );
+  assert.deepEqual(planCheckIssues, []);
+});
+
+test('validate exempts sealed-phase plan files from plan-check marker requirement', () => {
+  const cwd = makeTmpProject();
+  writeRequired(cwd, {
+    'PROJECT.md': MIN_PROJECT,
+    'REQUIREMENTS.md': MIN_REQUIREMENTS,
+    'ROADMAP.md': roadmapWithStatus(1, '[x]', 'See plans/phase-1.PLAN.md.'),
+    'STATE.md': STATE_PHASE_1,
+    'CONTEXT.phase-1.md': contextWithDecisions('- **D-01** — covered.\n'),
+  });
+  // Sealed phase, plan file present, NO marker — should still pass.
+  writePlanFileWithMarker(cwd, 1, 'Plan body cites D-01.', false);
+
+  const report = validate(cwd);
+  const planCheckIssues = report.issues.filter((i) =>
+    i.message.includes('missing the architect approval marker'),
+  );
+  assert.deepEqual(
+    planCheckIssues,
+    [],
+    `sealed phase should be exempt, got: ${JSON.stringify(planCheckIssues, null, 2)}`,
+  );
+});
+
 test('validate falls back to ROADMAP markers when no plan file exists', () => {
   const cwd = makeTmpProject();
   writeRequired(cwd, {
