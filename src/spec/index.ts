@@ -17,3 +17,4 @@ export {
   type RecordVerifyFailureResult,
 } from './record-verify-failure.js';
 export { readTemplateSpecBlock, mergeAgentsHeritage, type AgentsMergeAction, type AgentsMergeResult } from './agents-merge.js';
+export { execWrapper, type ExecWrapperArgs, type ExecWrapperResult } from './exec-wrapper.js';

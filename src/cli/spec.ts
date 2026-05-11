@@ -32,6 +32,11 @@ Usage:
                                           Idempotent by slug; call from $spec-verify on fail/partial.
   codexian spec inject                     Print the session-start context block (for shells).
   codexian spec where                      Print the active spec directory or "none".
+  codexian spec exec [codex-flags] --prompt "<text>" [--dry-run]
+                                          Codex CLI wrapper that prepends the spec contract
+                                          context to the prompt, bypassing the SessionStart
+                                          hook regression on Codex 0.129+. All non-prompt
+                                          flags are forwarded verbatim to \`codex exec\`.
 
 Options for init:
   --force        Overwrite existing spec files (default: skip).
@@ -306,6 +311,14 @@ export async function specCommand(rawArgs: string[]): Promise<void> {
       const report = doctor(cwd);
       console.log(formatReport(report));
       if (report.fails > 0) process.exit(1);
+      return;
+    }
+    case 'exec': {
+      // 'rest' is the raw arg list after `spec exec`; do not parse it
+      // here so codex-exec passthrough flags survive untouched.
+      const { execWrapper } = await import('../spec/index.js');
+      const result = await execWrapper({ rawArgs: rest, cwd });
+      if (result.code !== 0) process.exit(result.code);
       return;
     }
     default:
