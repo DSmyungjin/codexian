@@ -52,7 +52,7 @@ See [plans/phase-3.PLAN.md](plans/phase-3.PLAN.md). (Plan body moved out of ROAD
 
 ### Phase 4: Validation depth and scope sealing
 
-- **Status:** `[~]`
+- **Status:** `[x]`
 - **Goal:** Tighten the verify/plan/scope side of the contract. Chunk 1 (done): verify-failure recording surface that auto-appends fix tasks to STATE.md Active work (mirrors GSD `/gsd-verify-work` fix-plan append). Chunk 2: split PLAN out of ROADMAP into per-phase plan files under `.codexian/spec/plans/`. Chunk 3: plan-checker blocking gate on top of the existing Decision-ID coverage gate so plans are not just D-NN complete but goal-aligned.
 - **Acceptance:** `codexian spec record-verify-failure` CLI exists and is wired into `$spec-verify` skill for fail/partial verdicts; STATE.md Active work receives a structured fix-task bullet with root cause + evidence; per-phase plan body lives in `.codexian/spec/plans/phase-N.PLAN.md` (or equivalent), with ROADMAP retaining only a reference; coverage gate continues to fire against the new location; plan-checker blocking gate refuses to mark a phase planned when an architect-tier reviewer disagrees with the plan; unit tests cover the new modules with positive + negative cases.
 - **Dependencies:** Phase 2

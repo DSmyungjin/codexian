@@ -29,18 +29,16 @@ current_phase: 4
 
 ## Last seal
 
-last_sealed_phase: 4
-last_sealed_at: 2026-05-11T15:49:56.244Z
+last_sealed_phase: 3
+last_sealed_at: 2026-05-11T10:50:19.294Z
 
 ## Active work
 
 <!-- What is being worked on right now. Updated by executors. -->
 
-- Phase 4 sealed. No active phase work; next step is to define phase 5 (or call this branch ready to merge to main).
+- Phase 4 chunk 3 (next): plan-checker blocking gate on top of the existing Decision-ID coverage gate. Architect-tier reviewer signs off that the plan body is goal-aligned, not just D-NN complete. Most of the change is in `skills/spec-plan/SKILL.md` (insert architect call between $ralplan output and persistence). No new CLI subcommand expected.
 
 ## Recent decisions
-
-- 2026-05-11T15:49:56.244Z — Sealed phase 4 (Validation depth and scope sealing). All three chunks shipped + self-applied: verify-failure auto-append (commits a19a70b1 + bc93c3c4), PLAN file split (e4c35584 + 0f97453b), plan-checker blocking gate (3ffd83df + 2008d06f). plans/phase-4.PLAN.md is the first plan file written through the new gate. 71/71 spec tests green. No phase 5 in ROADMAP yet — current_phase left at 4 until a phase 5 is added.
 
 - 2026-05-11T11:04:40Z — Phase 4 chunk 2 (PLAN file split) shipped in commits e4c35584 + 0f97453b. plans/phase-2.PLAN.md and plans/phase-3.PLAN.md migrated, ROADMAP marker bodies collapsed to one-line back-compat references, extractor resolves plan file first / ROADMAP markers second / null when neither, session-start hook loads the current-phase plan file, FILENAME_KIND_HINTS recognises plans/phase-N.PLAN.md, doctor allows plans/ as a known top-dir. 31/31 spec tests green; validate OK at repo root.
 
@@ -74,3 +72,38 @@ last_sealed_at: 2026-05-11T15:49:56.244Z
 ## Notes
 
 <!-- Anything else workers/humans need to know to pick up from where the previous session left off. -->
+
+### Handoff (2026-05-11T11:04:40Z)
+
+Stopping at a clean point. Next session pickup brief:
+
+**Where we are**
+- Phase 4 chunks 1+2 done, chunk 3 (plan-checker blocking gate) is the only remaining work in phase 4.
+- All current code green: `npm run build` clean, `node --test dist/spec/__tests__/*.test.js` 31/31, `codexian spec validate` OK at repo root, `codexian spec doctor` all PASS except the one trust-hash WARN that belongs to a different session's domain.
+- Branch `feat/spec-contract` is N commits ahead of origin; no push has been authorised by the user.
+
+**What chunk 3 needs**
+1. Append decisions `D-12..D-NN` to `.codexian/spec/CONTEXT.phase-4.md` under a new sub-heading "plan-checker blocking gate (chunk 3)". Capture: who runs the checker (architect tier), gate input (CONTEXT + PLAN + ROADMAP phase entry), reject criteria (plan does not actually accomplish phase goal / leaves AC uncovered / proposes scope outside REQUIREMENTS), output shape (verdict + concrete rejection reasons), where the verdict is persisted (probably inline log in PLAN file or new VERIFY-style artifact — decide).
+2. Update `skills/spec-plan/SKILL.md` to call the architect-tier reviewer between the `$ralplan` output and the plan-file write. Reject → loop back; approve → write `plans/phase-N.PLAN.md`. Keep `--interactive` and `--deliberate` flags working.
+3. Add AC-13..AC-NN matching the new D-IDs.
+4. Tests: the gate lives in the skill prompt so unit testing the *code* is limited. Add a code-level test if any new validator hook fires (e.g. "if plan file exists but lacks an architect-approved marker, validate WARNs"). Otherwise rely on smoke test transcripts.
+
+**Don't disturb**
+- Other sessions are active in this branch — they've recently added hook-register, exec-wrapper, team-tasks (C2/C3/C4 connection surfaces). Avoid editing `src/spec/hook-register.ts`, `src/spec/exec-wrapper.ts`, `src/spec/team-tasks.ts`, and their tests unless explicitly asked.
+- The doctor's `codex hook registration` WARN about missing trust hash belongs to the hook-register session; leave it alone.
+
+**Naming / IDs to use**
+- Continue `D-NN` zero-padded scheme; phase 4 already uses D-01..D-11. Start chunk 3 at D-12.
+- New AC continues from AC-13.
+
+**Files to expect touching for chunk 3**
+- `.codexian/spec/CONTEXT.phase-4.md` (decisions + AC append)
+- `skills/spec-plan/SKILL.md` (architect call insertion)
+- Possibly `.codexian/spec/plans/phase-4.PLAN.md` (first time phase 4 itself gets a plan — this is also the test of D-04/D-09: gate fires once phase-4 has a plan file, so every D-01..D-NN in CONTEXT.phase-4.md must be cited in the plan file or validate will error)
+- Possibly a tiny code change in `src/spec/validate.ts` if you want validate to also surface a "no plan-checker verdict found" warning when a plan file exists but lacks the architect marker.
+
+**Where to read before starting**
+1. `.codexian/spec/CONTEXT.phase-4.md` D-01..D-11 (precedent decisions for chunk style)
+2. `skills/spec-plan/SKILL.md` (the file you'll edit; already updated with plan-file persistence in chunk 2)
+3. `skills/spec-verify/SKILL.md` (mirror pattern — placeholder skill with documented seam)
+4. `docs/spec-taxonomy.md` (taxonomy + four-channel teaching pattern, in case you add a new kind)
