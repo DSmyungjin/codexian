@@ -5,6 +5,8 @@ import {
   locateSpecDir,
   recordCompletion,
   RecordCompletionError,
+  recordVerifyFailure,
+  RecordVerifyFailureError,
   seal,
   SPEC_DIR,
   validate,
@@ -24,6 +26,10 @@ Usage:
   codexian spec record-completion <slug> [--summary "..."] [--phase N] [--evidence "<paths>"]
                                           Record a completed unit of work in STATE.md.
                                           Connection surface for Ralph completion → POSITION doc.
+  codexian spec record-verify-failure <slug> --fix-task "..." [--root-cause "..."] [--phase N] [--evidence "<paths>"]
+                                          Record a verify-step failure in STATE.md: append fix task
+                                          to Active work and a ledger line to Recent decisions.
+                                          Idempotent by slug; call from $spec-verify on fail/partial.
   codexian spec inject                     Print the session-start context block (for shells).
   codexian spec where                      Print the active spec directory or "none".
 
@@ -217,6 +223,57 @@ export async function specCommand(rawArgs: string[]): Promise<void> {
         console.log(`\n  ledger line:\n    ${result.ledgerLine}`);
       } catch (err) {
         if (err instanceof RecordCompletionError) {
+          console.error(`error: ${err.message}`);
+          process.exit(1);
+        }
+        throw err;
+      }
+      return;
+    }
+    case 'record-verify-failure': {
+      const slug = args.positional[0];
+      if (!slug) {
+        console.error('error: usage — codexian spec record-verify-failure <slug> --fix-task "..." [--root-cause "..."] [--phase N] [--evidence "<paths>"]');
+        process.exit(1);
+      }
+      const fixTask = args.named.get('fix-task');
+      if (!fixTask) {
+        console.error('error: --fix-task "<task title>" is required');
+        process.exit(1);
+      }
+      const rootCause = args.named.get('root-cause');
+      const phaseRaw = args.named.get('phase');
+      const phase = phaseRaw ? Number.parseInt(phaseRaw, 10) : undefined;
+      const evidenceRaw = args.named.get('evidence');
+      const evidence = evidenceRaw
+        ? evidenceRaw
+            .split(/[,\s]+/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : undefined;
+      try {
+        const result = recordVerifyFailure({
+          cwd,
+          slug,
+          fixTask,
+          rootCause,
+          phase,
+          evidence,
+        });
+        console.log(`recorded verify failure: ${slug}`);
+        console.log(`  state file:           ${result.statePath}`);
+        if (result.suppressedDuplicate) {
+          console.log(`  active work:          slug already present, no duplicate appended`);
+        } else if (result.createdActiveWorkSection) {
+          console.log(`  active work:          section created and bullet appended`);
+        } else if (result.appendedActiveWork) {
+          console.log(`  active work:          fix bullet appended`);
+        }
+        console.log(`  recent decisions:     ${result.appendedRecentDecisions ? 'ledger line appended' : 'skipped (no ## Recent decisions section found)'}`);
+        console.log(`\n  bullet:\n    - ${result.bulletBody}`);
+        console.log(`\n  ledger line:\n    ${result.ledgerLine}`);
+      } catch (err) {
+        if (err instanceof RecordVerifyFailureError) {
           console.error(`error: ${err.message}`);
           process.exit(1);
         }

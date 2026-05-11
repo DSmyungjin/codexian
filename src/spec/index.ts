@@ -10,4 +10,10 @@ export {
   type RecordCompletionOptions,
   type RecordCompletionResult,
 } from './record-completion.js';
+export {
+  recordVerifyFailure,
+  RecordVerifyFailureError,
+  type RecordVerifyFailureOptions,
+  type RecordVerifyFailureResult,
+} from './record-verify-failure.js';
 export { readTemplateSpecBlock, mergeAgentsHeritage, type AgentsMergeAction, type AgentsMergeResult } from './agents-merge.js';
