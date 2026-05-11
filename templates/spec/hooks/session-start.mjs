@@ -8,9 +8,10 @@
 // the session before the user's first turn.
 //
 // This hook concatenates .codexian/spec/{PROJECT,REQUIREMENTS,
-// ROADMAP,STATE}.md plus the CONTEXT for the current phase
-// (derived from STATE.md's `current_phase: N` line) and emits the
-// envelope. Stdlib-only and silent when no spec dir exists.
+// ROADMAP,STATE}.md plus the CONTEXT.phase-N.md and (since phase 4
+// chunk 2) plans/phase-N.PLAN.md for the current phase, all derived
+// from STATE.md's `current_phase: N` line. Then emits the envelope.
+// Stdlib-only and silent when no spec dir or doc is present.
 
 import { readFileSync, existsSync, writeSync } from "node:fs";
 import path from "node:path";
@@ -56,6 +57,10 @@ function buildContext() {
       const ctxName = `CONTEXT.phase-${phase}.md`;
       const ctxText = loadFile(dir, ctxName);
       if (ctxText) blocks.push(`## ${ctxName}\n\n${ctxText.trim()}`);
+
+      const planRel = path.join("plans", `phase-${phase}.PLAN.md`);
+      const planText = loadFile(dir, planRel);
+      if (planText) blocks.push(`## ${planRel}\n\n${planText.trim()}`);
     }
   }
 

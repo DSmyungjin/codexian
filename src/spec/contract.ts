@@ -180,7 +180,7 @@ export const DOC_KIND_SPECS: Record<DocKind, DocKindSpec> = {
     requiredSections: [],
     sizeBudgetLines: 300,
     ownerSkill: 'spec-plan',
-    summary: 'Approved plan for a phase. Currently embedded in ROADMAP between SPEC:PLAN markers.',
+    summary: 'Approved plan for a phase. Canonical location is `plans/phase-N.PLAN.md`; ROADMAP keeps a back-compat marker reference.',
   },
   MAP: {
     kind: 'MAP',
@@ -240,6 +240,8 @@ export const FILENAME_KIND_HINTS: { match: RegExp; kind: DocKind }[] = [
   { match: /^STATE\.md$/i, kind: 'POSITION' },
   { match: /^CONTEXT\.phase-\d+\.md$/i, kind: 'DECISIONS' },
   { match: /^CONTEXT\.template\.md$/i, kind: 'DECISIONS' },
+  { match: /^plans\/phase-\d+\.PLAN\.md$/i, kind: 'PLAN' },
+  { match: /^phase-\d+\.PLAN\.md$/i, kind: 'PLAN' },
   { match: /^MAP\.md$/i, kind: 'MAP' },
   { match: /^PATTERNS\.md$/i, kind: 'PATTERNS' },
   { match: /^sealed\//i, kind: 'HISTORY' },

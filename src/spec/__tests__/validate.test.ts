@@ -195,3 +195,96 @@ test('validate is silent on coverage when CONTEXT D-IDs are all referenced', () 
   );
   assert.deepEqual(coverageIssues, []);
 });
+
+function writePlanFile(cwd: string, phase: number, body: string): void {
+  const planDir = join(cwd, '.codexian', 'spec', 'plans');
+  mkdirSync(planDir, { recursive: true });
+  writeFileSync(
+    join(planDir, `phase-${phase}.PLAN.md`),
+    `<!-- SPEC:DOC:PLAN -->\n<!-- spec:kind: PLAN -->\n<!-- schema_version: 1 -->\n# PLAN — Phase ${phase}\n\n${body}`,
+    'utf8',
+  );
+}
+
+test('validate reads plan file when present, preferring it over ROADMAP markers', () => {
+  const cwd = makeTmpProject();
+  writeRequired(cwd, {
+    'PROJECT.md': MIN_PROJECT,
+    'REQUIREMENTS.md': MIN_REQUIREMENTS,
+    // ROADMAP marker block is back-compat reference only (no D-IDs in body)
+    'ROADMAP.md': roadmapWithPlan('See plans/phase-1.PLAN.md.'),
+    'STATE.md': STATE_PHASE_1,
+    'CONTEXT.phase-1.md': contextWithDecisions(
+      '- **D-01** — must be in plan file.\n- **D-02** — must be in plan file.\n',
+    ),
+  });
+  writePlanFile(cwd, 1, 'Plan body cites D-01 and D-02 inline.');
+
+  const report = validate(cwd);
+  const coverageIssues = report.issues.filter(
+    (i) =>
+      i.message.includes('missing references to decisions') ||
+      i.message.includes('not declared in CONTEXT'),
+  );
+  assert.deepEqual(
+    coverageIssues,
+    [],
+    `expected clean coverage from plan file, got: ${JSON.stringify(coverageIssues, null, 2)}`,
+  );
+});
+
+test('validate errors on plan file with missing D-ID even when ROADMAP marker body cites it', () => {
+  const cwd = makeTmpProject();
+  writeRequired(cwd, {
+    'PROJECT.md': MIN_PROJECT,
+    'REQUIREMENTS.md': MIN_REQUIREMENTS,
+    // ROADMAP "lies" about coverage — plan file is authoritative.
+    'ROADMAP.md': roadmapWithPlan('legacy claim that D-01 and D-02 are covered'),
+    'STATE.md': STATE_PHASE_1,
+    'CONTEXT.phase-1.md': contextWithDecisions(
+      '- **D-01** — covered in plan file.\n- **D-02** — missing from plan file.\n',
+    ),
+  });
+  writePlanFile(cwd, 1, 'Plan body cites D-01 only.');
+
+  const report = validate(cwd);
+  const errors = report.issues.filter((i) => i.level === 'error');
+  const missingErr = errors.find((i) =>
+    i.message.includes('missing references to decisions: D-02'),
+  );
+  assert.ok(
+    missingErr,
+    `expected error mentioning D-02 missing from plan file, got: ${JSON.stringify(errors, null, 2)}`,
+  );
+  // Error message should mention plan file location, not ROADMAP.
+  assert.ok(
+    missingErr!.message.includes('plans/phase-1.PLAN.md'),
+    'expected error to reference plans/phase-1.PLAN.md',
+  );
+});
+
+test('validate falls back to ROADMAP markers when no plan file exists', () => {
+  const cwd = makeTmpProject();
+  writeRequired(cwd, {
+    'PROJECT.md': MIN_PROJECT,
+    'REQUIREMENTS.md': MIN_REQUIREMENTS,
+    // No plan file, only legacy ROADMAP markers.
+    'ROADMAP.md': roadmapWithPlan('plan body cites D-01 only here.'),
+    'STATE.md': STATE_PHASE_1,
+    'CONTEXT.phase-1.md': contextWithDecisions(
+      '- **D-01** — covered.\n- **D-02** — missing.\n',
+    ),
+  });
+  // No writePlanFile call.
+
+  const report = validate(cwd);
+  const errors = report.issues.filter((i) => i.level === 'error');
+  const missingErr = errors.find((i) =>
+    i.message.includes('missing references to decisions: D-02'),
+  );
+  assert.ok(missingErr, 'expected fallback gate to still fire');
+  assert.ok(
+    missingErr!.message.includes('ROADMAP.md'),
+    'expected error to reference ROADMAP.md (legacy fallback location)',
+  );
+});

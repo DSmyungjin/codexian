@@ -40,6 +40,7 @@ const KNOWN_TOP_DIRS = new Set<string>([
   SEALED_DIR,
   'hooks',
   'verify',
+  'plans',
 ]);
 
 const CONTEXT_PHASE_PATTERN = /^CONTEXT\.phase-\d+\.md$/;

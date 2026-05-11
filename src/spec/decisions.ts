@@ -2,11 +2,15 @@
  * codexian spec-contract — Decision ID extraction and coverage gate.
  *
  * Decisions in CONTEXT.phase-N.md are tagged inline with IDs of the form
- * `D-NN` (zero-padded, min 2 digits). Plans embedded in ROADMAP.md
- * between `<!-- SPEC:PLAN:START phase-N -->` / `END` markers must
- * mention every CONTEXT D-ID at least once. The validator uses this
- * module to enforce that contract.
+ * `D-NN` (zero-padded, min 2 digits). Plans live in
+ * `.codexian/spec/plans/phase-N.PLAN.md` (canonical, since phase 4
+ * chunk 2) with a back-compat marker block remaining in ROADMAP.md.
+ * Every CONTEXT D-ID must be mentioned in the plan at least once.
+ * The validator uses this module to enforce that contract.
  */
+
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
 
 /** Matches a single Decision ID like "D-01", "D-12", "D-101". */
 export const DECISION_ID_RE = /\bD-\d{2,}\b/g;
@@ -71,4 +75,37 @@ function uniqueOrdered(values: readonly string[]): string[] {
     out.push(v);
   }
   return out;
+}
+
+/**
+ * Resolve the plan decision references for `phase` against the spec
+ * directory, preferring the canonical plan file over the legacy
+ * ROADMAP SPEC:PLAN marker block.
+ *
+ * Semantics:
+ *   - If `plans/phase-N.PLAN.md` exists → its D-IDs are authoritative,
+ *     even when the file contains zero IDs (empty plan still counts as
+ *     "planned" — coverage gate fires).
+ *   - Else fall back to `extractPlanDecisionRefs(roadmapText, phase)`
+ *     using ROADMAP.md.
+ *   - Else (neither surface exists) → null (caller treats as
+ *     "unplanned phase, gate is a no-op" per D-04 of phase 2).
+ */
+export function resolvePlanDecisionRefs(
+  specDir: string,
+  phase: number,
+): string[] | null {
+  const planPath = join(specDir, 'plans', `phase-${phase}.PLAN.md`);
+  if (existsSync(planPath)) {
+    const text = readFileSync(planPath, 'utf8');
+    return uniqueOrdered(text.match(DECISION_ID_RE) ?? []);
+  }
+
+  const roadmapPath = join(specDir, 'ROADMAP.md');
+  if (existsSync(roadmapPath)) {
+    const roadmap = readFileSync(roadmapPath, 'utf8');
+    return extractPlanDecisionRefs(roadmap, phase);
+  }
+
+  return null;
 }

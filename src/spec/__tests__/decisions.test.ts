@@ -1,11 +1,15 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import {
   DECISION_ID_RE,
   computeCoverage,
   extractDecisionIds,
   extractPlanDecisionRefs,
+  resolvePlanDecisionRefs,
 } from '../decisions.js';
 
 test('extractDecisionIds returns unique IDs in first-occurrence order', () => {
@@ -97,4 +101,63 @@ test('computeCoverage returns empty arrays when plan covers decisions exactly', 
 test('computeCoverage preserves declaration order in missing list', () => {
   const cov = computeCoverage(['D-05', 'D-01', 'D-03'], []);
   assert.deepEqual(cov.missing, ['D-05', 'D-01', 'D-03']);
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// resolvePlanDecisionRefs — file-backed resolver with fallback.
+// ─────────────────────────────────────────────────────────────────────
+
+function makeSpecDir(): string {
+  const cwd = mkdtempSync(join(tmpdir(), 'codexian-resolve-'));
+  const dir = join(cwd, 'spec');
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+test('resolvePlanDecisionRefs returns plan-file IDs when file exists (preferred)', () => {
+  const dir = makeSpecDir();
+  mkdirSync(join(dir, 'plans'));
+  writeFileSync(
+    join(dir, 'plans', 'phase-1.PLAN.md'),
+    '# PLAN\n\n- plan cites D-01 and D-02.',
+  );
+  // ROADMAP also has the marker block but with a different ID — must be ignored.
+  writeFileSync(
+    join(dir, 'ROADMAP.md'),
+    '<!-- SPEC:PLAN:START phase-1 -->\n- legacy marker cites D-99.\n<!-- SPEC:PLAN:END phase-1 -->\n',
+  );
+  assert.deepEqual(resolvePlanDecisionRefs(dir, 1), ['D-01', 'D-02']);
+});
+
+test('resolvePlanDecisionRefs returns empty array when plan file exists but has no IDs', () => {
+  const dir = makeSpecDir();
+  mkdirSync(join(dir, 'plans'));
+  writeFileSync(join(dir, 'plans', 'phase-2.PLAN.md'), '# PLAN\n\nNo IDs yet.');
+  assert.deepEqual(resolvePlanDecisionRefs(dir, 2), []);
+});
+
+test('resolvePlanDecisionRefs falls back to ROADMAP markers when plan file is absent', () => {
+  const dir = makeSpecDir();
+  // No plans/ dir at all.
+  writeFileSync(
+    join(dir, 'ROADMAP.md'),
+    '<!-- SPEC:PLAN:START phase-1 -->\n- legacy cites D-77.\n<!-- SPEC:PLAN:END phase-1 -->\n',
+  );
+  assert.deepEqual(resolvePlanDecisionRefs(dir, 1), ['D-77']);
+});
+
+test('resolvePlanDecisionRefs returns null when neither surface exists', () => {
+  const dir = makeSpecDir();
+  // No plans/ dir, no ROADMAP.md.
+  assert.equal(resolvePlanDecisionRefs(dir, 1), null);
+});
+
+test('resolvePlanDecisionRefs returns null when ROADMAP has no markers for the requested phase', () => {
+  const dir = makeSpecDir();
+  writeFileSync(
+    join(dir, 'ROADMAP.md'),
+    '<!-- SPEC:PLAN:START phase-2 -->\nD-01\n<!-- SPEC:PLAN:END phase-2 -->\n',
+  );
+  // Querying phase 1 → no markers there, ROADMAP exists but null for this phase.
+  assert.equal(resolvePlanDecisionRefs(dir, 1), null);
 });
