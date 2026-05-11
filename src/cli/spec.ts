@@ -15,7 +15,9 @@ Usage:
   codexian spec init                       Scaffold .codexian/spec/ from templates.
   codexian spec doctor                     Check installation integrity (files, hook, AGENTS.md, skills).
   codexian spec validate                   Lint the spec docs and report issues.
-  codexian spec seal <phase> [--note ...]  Snapshot STATE + CONTEXT for a phase into sealed/.
+  codexian spec seal <phase> [--note ...] [--advance]
+                                          Snapshot STATE + CONTEXT for a phase into sealed/.
+                                          --advance also flips ROADMAP statuses and bumps current_phase.
   codexian spec new-phase <N> <name>       Create CONTEXT.phase-N.md from the template.
   codexian spec inject                     Print the session-start context block (for shells).
   codexian spec where                      Print the active spec directory or "none".
@@ -126,17 +128,29 @@ export async function specCommand(rawArgs: string[]): Promise<void> {
       const phaseStr = args.positional[0];
       const phase = phaseStr ? Number.parseInt(phaseStr, 10) : NaN;
       if (!Number.isFinite(phase) || phase < 0) {
-        console.error('error: usage — codexian spec seal <phase> [--note "..."] [--force]');
+        console.error('error: usage — codexian spec seal <phase> [--note "..."] [--force] [--advance]');
         process.exit(1);
       }
       const note = args.named.get('note');
       const force = args.flags.has('--force');
+      const advance = args.flags.has('--advance');
       try {
-        const result = seal({ cwd, phase, note, force });
+        const result = seal({ cwd, phase, note, force, advance });
         console.log(`sealed phase ${phase}`);
         console.log(`  state:   ${result.statePath}`);
         if (result.contextPath) console.log(`  context: ${result.contextPath}`);
         console.log(`  ledger:  ${result.ledgerPath}`);
+        if (result.advanced) {
+          const a = result.advanced;
+          console.log(`advanced workflow:`);
+          console.log(`  roadmap phase ${phase}: ${a.roadmapFlipped ? 'flipped to [x]' : 'not flipped (no matching status marker)'}`);
+          if (a.toPhase != null) {
+            console.log(`  roadmap phase ${a.toPhase}: ${a.nextRoadmapFlipped ? 'flipped to [~]' : 'present but no [ ] marker to flip'}`);
+            console.log(`  state current_phase: ${phase} → ${a.toPhase}`);
+          } else {
+            console.log(`  no phase ${phase + 1} in ROADMAP — current_phase left unchanged`);
+          }
+        }
       } catch (err) {
         const e = err as Error;
         console.error(`error: ${e.message}`);

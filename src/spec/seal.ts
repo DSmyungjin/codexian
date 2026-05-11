@@ -16,6 +16,19 @@ export interface SealOptions {
    * session before anyone else has seen it.
    */
   force?: boolean;
+  /**
+   * After sealing, advance the workflow to the next phase:
+   *   - Flip ROADMAP.md status for phase N from `[~]` or `[ ]` → `[x]`
+   *   - Flip ROADMAP.md status for phase N+1 from `[ ]` → `[~]` (if it exists)
+   *   - Set STATE.md current_phase to N+1 (only if phase N+1 exists in ROADMAP)
+   *   - Append a transition line to STATE.md ## Recent decisions
+   *
+   * Off by default so the CLI primitive stays low-level; the
+   * spec-seal skill is responsible for invoking the workflow advance
+   * when run from inside Codex. Set --advance on the CLI for
+   * scripted seals that want the transition in one call.
+   */
+  advance?: boolean;
 }
 
 export class SealError extends Error {
@@ -30,6 +43,14 @@ export interface SealResult {
   statePath: string;
   contextPath: string | null;
   ledgerPath: string;
+  /** Set when --advance was used and the transition succeeded. */
+  advanced?: {
+    fromPhase: number;
+    toPhase: number | null;
+    roadmapFlipped: boolean;
+    nextRoadmapFlipped: boolean;
+    statePhaseAdvanced: boolean;
+  };
 }
 
 export function seal(options: SealOptions): SealResult {
@@ -90,5 +111,124 @@ export function seal(options: SealOptions): SealResult {
     );
   }
 
-  return { sealedDir, statePath: stateDest, contextPath: ctxDest, ledgerPath };
+  let advanced: SealResult['advanced'] | undefined;
+  if (options.advance) {
+    advanced = advanceWorkflow(located.dir, phase, now);
+  }
+
+  return { sealedDir, statePath: stateDest, contextPath: ctxDest, ledgerPath, advanced };
+}
+
+/**
+ * Flip the ROADMAP status marker on the entry whose heading is
+ * `### Phase N: ...`. Returns true if the marker was actually
+ * changed (which implies the phase exists in ROADMAP and its
+ * status matched one of the allowed source markers).
+ *
+ * Implemented as a string scan to sidestep regex-escape pitfalls
+ * with the backtick-bracket marker tokens.
+ */
+function flipRoadmapStatus(
+  roadmapText: string,
+  phase: number,
+  fromMarkers: string[],
+  toMarker: string,
+): { text: string; flipped: boolean } {
+  const heading = `### Phase ${phase}:`;
+  const phaseIdx = roadmapText.indexOf(heading);
+  if (phaseIdx < 0) return { text: roadmapText, flipped: false };
+
+  // Only look inside this phase's entry (up to the next ### heading).
+  const tail = roadmapText.slice(phaseIdx);
+  const nextHeadingRelIdx = tail.indexOf('\n### ', heading.length);
+  const scopeEnd =
+    nextHeadingRelIdx >= 0 ? phaseIdx + nextHeadingRelIdx : roadmapText.length;
+  const scope = roadmapText.slice(phaseIdx, scopeEnd);
+
+  for (const from of fromMarkers) {
+    const idx = scope.indexOf(from);
+    if (idx < 0) continue;
+    // Verify the marker sits on a Status line — guards against false
+    // matches elsewhere in the phase body.
+    const lineStart = scope.lastIndexOf('\n', idx) + 1;
+    const line = scope.slice(lineStart, scope.indexOf('\n', idx));
+    if (!/\*\*Status:\*\*/.test(line)) continue;
+
+    const absIdx = phaseIdx + idx;
+    return {
+      text:
+        roadmapText.slice(0, absIdx) +
+        toMarker +
+        roadmapText.slice(absIdx + from.length),
+      flipped: true,
+    };
+  }
+  return { text: roadmapText, flipped: false };
+}
+
+function advanceWorkflow(
+  specDir: string,
+  phase: number,
+  now: string,
+): NonNullable<SealResult['advanced']> {
+  const result: NonNullable<SealResult['advanced']> = {
+    fromPhase: phase,
+    toPhase: null,
+    roadmapFlipped: false,
+    nextRoadmapFlipped: false,
+    statePhaseAdvanced: false,
+  };
+
+  // 1. Flip ROADMAP statuses if the file exists.
+  const roadmapPath = join(specDir, 'ROADMAP.md');
+  let nextPhaseExists = false;
+  if (existsSync(roadmapPath)) {
+    let roadmap = readFileSync(roadmapPath, 'utf8');
+
+    const step1 = flipRoadmapStatus(roadmap, phase, ['`[~]`', '`[ ]`'], '`[x]`');
+    roadmap = step1.text;
+    result.roadmapFlipped = step1.flipped;
+
+    const step2 = flipRoadmapStatus(roadmap, phase + 1, ['`[ ]`'], '`[~]`');
+    roadmap = step2.text;
+    result.nextRoadmapFlipped = step2.flipped;
+
+    // Detect whether phase N+1 exists at all (status flip not strictly required).
+    const nextRe = new RegExp(`^### Phase ${phase + 1}:`, 'm');
+    nextPhaseExists = nextRe.test(roadmap);
+
+    if (step1.flipped || step2.flipped) {
+      writeFileSync(roadmapPath, roadmap, 'utf8');
+    }
+  }
+
+  // 2. Advance STATE.md current_phase + append a recent-decisions line.
+  const statePath = join(specDir, 'STATE.md');
+  if (!existsSync(statePath)) return result;
+  let stateText = readFileSync(statePath, 'utf8');
+
+  if (nextPhaseExists) {
+    const before = stateText;
+    stateText = stateText.replace(
+      /^(\s*current_phase:)[ \t]*\d+[ \t]*$/m,
+      `$1 ${phase + 1}`,
+    );
+    result.statePhaseAdvanced = before !== stateText;
+    if (result.statePhaseAdvanced) result.toPhase = phase + 1;
+  }
+
+  // Append a transition entry to ## Recent decisions if that heading exists.
+  const decisionsRe = /^(##\s+Recent decisions[^\n]*\n)/m;
+  const decisionsMatch = stateText.match(decisionsRe);
+  if (decisionsMatch && decisionsMatch.index !== undefined) {
+    const insertAt = decisionsMatch.index + decisionsMatch[0].length;
+    const line =
+      `\n- ${now} — Sealed phase ${phase} and advanced to ` +
+      (result.statePhaseAdvanced ? `phase ${phase + 1}` : `(no phase ${phase + 1} in roadmap)`) +
+      '.\n';
+    stateText = stateText.slice(0, insertAt) + line + stateText.slice(insertAt);
+  }
+
+  writeFileSync(statePath, stateText, 'utf8');
+  return result;
 }
