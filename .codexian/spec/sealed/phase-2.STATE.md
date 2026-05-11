@@ -25,12 +25,12 @@
 
 ## Current phase
 
-current_phase: 3
+current_phase: 2
 
 ## Last seal
 
-last_sealed_phase: 2
-last_sealed_at: 2026-05-11T08:22:18.923Z
+last_sealed_phase: 1
+last_sealed_at: 2026-05-11T06:27:43.644Z
 
 ## Active work
 
@@ -39,8 +39,6 @@ last_sealed_at: 2026-05-11T08:22:18.923Z
 - Implementing Decision ID + plan coverage gate in src/spec/decisions.ts and src/spec/validate.ts (AC-6/AC-7)
 
 ## Recent decisions
-
-- 2026-05-11T08:22:18.923Z — Sealed phase 2 and advanced to phase 3.
 
 - 2026-05-11T08:19:52.063Z — Ralph completed: verify-ralph-mode (phase 2) — Ralph completion audit passed with 5 spec files read + AC-5 next-improvement identified Evidence: .codexian/spec/verify/PHASE-2-RALPH-RUN-20260511T064510Z.md.
 
