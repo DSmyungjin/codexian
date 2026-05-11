@@ -11,6 +11,12 @@
 > Phase 3 is *gated on upstream*. It cannot ship until OpenAI Codex CLI restores
 > the SessionStart hook firing behaviour. Until then the AGENTS.md mandatory-first-action
 > directive (committed in phase 1) is the canonical injection channel.
+>
+> **Verification record**: see [`docs/codex-hook-regression.md`](../../docs/codex-hook-regression.md)
+> for the 3-version reproduction proving hooks fire on 0.128.0 but not on
+> 0.130.0 / 0.131.0-alpha.4. `codexian spec doctor` now surfaces the regression
+> automatically via `checkCodexVersion()` so users never silently fall back
+> to AGENTS.md-only operation.
 
 ## Layout / shapes
 

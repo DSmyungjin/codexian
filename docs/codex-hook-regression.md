@@ -1,0 +1,167 @@
+# Codex CLI SessionStart hook regression
+
+> A focused incident record for codexian users and future contributors. Phase 3
+> of the codexian spec contract (hook auto-registration) hinges on upstream
+> resolving this issue. Until then this doc is the canonical reference for
+> *why* AGENTS.md is the primary load channel.
+
+## What broke
+
+OpenAI's Codex CLI introduced a regression sometime between **0.128.0** and
+**0.129.0** that prevents `SessionStart` (and `PreToolUse`) hooks declared in
+`.codex/hooks.json` from firing. The bug is tracked upstream at
+[openai/codex#21639](https://github.com/openai/codex/issues/21639), still open
+as of 2026-05-11.
+
+The upstream issue title cites the Codex *Desktop app*. Empirical testing in
+this repo confirmed the regression also affects the **`codex exec` non-
+interactive CLI path** — i.e., the path the codexian spec contract actually
+uses. Whatever the underlying fault, it is *not* limited to Desktop.
+
+## How we verified it
+
+A reproducible 3-version smoke test, identical setup each time:
+
+1. Project with `.codex/config.toml` containing `[features] codex_hooks = true`.
+2. `.codex/hooks.json` declares one SessionStart hook with a `matcher`,
+   pointing at a bash script that:
+   - Writes a marker line to `/tmp/cx-hook-fired.log` (proves the script ran).
+   - Emits the Codex JSON envelope on stdout with
+     `additionalContext: "HOOK_INJECTED_CONTEXT_MARKER_42"` (proves the context
+     reaches the model).
+3. Run `codex exec` with a prompt that asks the model to report whether the
+   marker is present in its context.
+4. Inspect the side-effect file *and* the model's reply.
+
+| Codex CLI version | Script executed | Marker file written | additionalContext injected | Model reply |
+|-------------------|-----------------|---------------------|----------------------------|-------------|
+| **0.128.0** | yes | yes (timestamp) | yes | `YES_INJECTED` |
+| **0.130.0** | no  | no                  | no                         | `NO_NOT_PRESENT` |
+| **0.131.0-alpha.4** | no | no              | no                         | `NO_NOT_PRESENT` |
+
+The 0.130.0 transcript shows Codex emitting `hook: SessionStart Completed` —
+i.e., the runtime announces the lifecycle event, but the configured command
+is never actually executed. So the bug is *not* "Codex forgot the hook
+system exists." The hook subsystem reports completion to the observability
+surface but skips the dispatch. That is a single internal break, not a
+configuration problem on the user side.
+
+### Reproducing locally
+
+```bash
+# 1. Get a known-good and a known-broken Codex side by side
+mkdir -p /tmp/codex-old   && cd /tmp/codex-old   && npm init -y >/dev/null && npm install @openai/codex@0.128.0
+mkdir -p /tmp/codex-newest && cd /tmp/codex-newest && npm init -y >/dev/null && npm install @openai/codex@0.131.0-alpha.4
+
+# 2. Create the test project
+rm -rf /tmp/cx-hook-test && mkdir -p /tmp/cx-hook-test/.codex/hooks
+cd /tmp/cx-hook-test
+cat > .codex/config.toml <<'TOML'
+[features]
+codex_hooks = true
+TOML
+cat > .codex/hooks/session-start.sh <<'SH'
+#!/usr/bin/env bash
+echo "FIRED at $(date -u +%FT%TZ)" > /tmp/cx-hook-fired.log
+cat <<'JSON'
+{"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "HOOK_INJECTED_CONTEXT_MARKER_42"}}
+JSON
+SH
+chmod +x .codex/hooks/session-start.sh
+cat > .codex/hooks.json <<EOF
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash '/tmp/cx-hook-test/.codex/hooks/session-start.sh'",
+            "statusMessage": "test session-start"
+          }
+        ]
+      }
+    ]
+  }
+}
+EOF
+
+# 3. Run against each Codex
+for v in /tmp/codex-old /tmp/codex-newest; do
+  rm -f /tmp/cx-hook-fired.log
+  $v/node_modules/.bin/codex --version
+  $v/node_modules/.bin/codex exec --skip-git-repo-check -C . -s read-only \
+    --dangerously-bypass-approvals-and-sandbox \
+    "Look for HOOK_INJECTED_CONTEXT_MARKER_42 in your context. Reply YES_INJECTED or NO_NOT_PRESENT." </dev/null \
+    2>&1 | tail -3
+  ls -la /tmp/cx-hook-fired.log 2>&1 | head -1
+  echo "---"
+done
+```
+
+If you see a `FIRED at ...` log and `YES_INJECTED` reply, hooks work in your
+Codex build. If the file is missing and the reply is `NO_NOT_PRESENT`, the
+regression is active.
+
+## What codexian does about it
+
+The spec contract has **two load channels**:
+
+1. **`AGENTS.md` mandatory-first-action directive** — primary, always-on.
+   Authored by `codexian spec init` into the project-root `AGENTS.md`. Codex
+   CLI's `AGENTS.md` auto-load is *not* affected by the hook regression. Every
+   `codex exec` run on every Codex version reads the directive and complies.
+   Verified in three independent real-Codex sessions (Test 12, Test 13,
+   plus the Phase 2 verify transcripts in `.codexian/spec/STATE.md` Recent
+   decisions).
+2. **`.codexian/spec/hooks/session-start.mjs` hook script** — currently
+   opportunistic. The script is generated by `spec init` and emits the
+   Codex JSON envelope correctly. When upstream resolves #21639, the script
+   becomes useful as a stricter system-context channel that does not depend
+   on the model honouring an instruction.
+
+### Doctor warning
+
+`codexian spec doctor` runs `codex --version` and reports the state of the
+hook channel:
+
+```
+[PASS] codex CLI version: 0.128.0 — SessionStart hooks fire normally
+[WARN] codex CLI version: 0.130.0 is affected by the SessionStart hook
+       regression (openai/codex#21639 — confirmed on 0.130.0 and
+       0.131.0-alpha.4). The spec contract still loads via the AGENTS.md
+       mandatory directive (verified working), but the .codex/hooks.json
+       channel is silently disabled. To restore the hook channel, pin to
+       0.128.0: `npm install -g @openai/codex@0.128.0`. When upstream
+       resolves the regression, update this check.
+[INFO] codex CLI version: codex binary not on PATH …  (skipped)
+```
+
+So a user who upgrades Codex CLI never silently loses the hook channel
+without warning.
+
+## Decision matrix for codexian users
+
+| If you … | Recommended action |
+|----------|--------------------|
+| value the hook channel (stricter system context, no LLM-discretion risk under long sessions) | `npm install -g @openai/codex@0.128.0` — the last known-good release |
+| value the latest Codex CLI features (vim mode, /hooks browser, plugin marketplace UX, Bedrock console-login auth) | stay on the latest; the spec contract still works via AGENTS.md |
+| want both | wait for upstream fix; `codexian spec doctor` will flip back to PASS automatically once your CLI is unaffected |
+
+The codexian value proposition (typed documentation contract for `codex exec`
+non-interactive flow) is **independent of any Codex 0.129 / 0.130 features**.
+None of the affected version's changes touch the surface the spec contract
+leverages. Pinning to 0.128.0 is a real option, not a workaround.
+
+## Tracking
+
+- Upstream: https://github.com/openai/codex/issues/21639
+- codexian doctor check: `src/spec/doctor.ts` → `checkCodexVersion()`
+- Phase 3 acceptance: `.codexian/spec/CONTEXT.phase-3.md`
+- This document: `docs/codex-hook-regression.md`
+
+When upstream merges a fix, update `HOOK_REGRESSION_MIN_MINOR` in
+`src/spec/doctor.ts` to the first known-good post-fix minor version (or
+replace the version check with a feature probe). At that point Phase 3 can
+move from `[~]` to `[x]`.

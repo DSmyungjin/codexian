@@ -40,6 +40,8 @@ last_sealed_at: 2026-05-11T08:22:18.923Z
 
 ## Recent decisions
 
+- 2026-05-11T10:27:52.865Z — Ralph completed: verify-codex-hook-regression (phase 3) — 0.128 PASS, 0.130 + 0.131-alpha.4 NO_NOT_PRESENT. Doctor surfaces; AGENTS.md is primary load channel. Evidence: docs/codex-hook-regression.md, src/spec/doctor.ts, openai/codex#21639.
+
 - 2026-05-11T08:22:18.923Z — Sealed phase 2 and advanced to phase 3.
 
 - 2026-05-11T08:19:52.063Z — Ralph completed: verify-ralph-mode (phase 2) — Ralph completion audit passed with 5 spec files read + AC-5 next-improvement identified Evidence: .codexian/spec/verify/PHASE-2-RALPH-RUN-20260511T064510Z.md.
