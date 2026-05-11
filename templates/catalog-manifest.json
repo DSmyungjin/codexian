@@ -332,6 +332,62 @@
       "status": "internal",
       "core": false,
       "internalRequired": true
+    },
+    {
+      "name": "spec-discuss",
+      "category": "planning",
+      "status": "active",
+      "core": false,
+      "internalRequired": false
+    },
+    {
+      "name": "spec-plan",
+      "category": "planning",
+      "status": "active",
+      "core": false,
+      "internalRequired": false
+    },
+    {
+      "name": "spec-roadmap",
+      "category": "planning",
+      "status": "active",
+      "core": false,
+      "internalRequired": false
+    },
+    {
+      "name": "spec-seal",
+      "category": "execution",
+      "status": "active",
+      "core": false,
+      "internalRequired": false
+    },
+    {
+      "name": "spec-state-update",
+      "category": "execution",
+      "status": "active",
+      "core": false,
+      "internalRequired": false
+    },
+    {
+      "name": "spec-map",
+      "category": "utility",
+      "status": "active",
+      "core": false,
+      "internalRequired": false
+    },
+    {
+      "name": "spec-patterns",
+      "category": "utility",
+      "status": "active",
+      "core": false,
+      "internalRequired": false
+    },
+    {
+      "name": "spec-verify",
+      "category": "utility",
+      "status": "active",
+      "core": false,
+      "internalRequired": false
     }
   ],
   "agents": [
